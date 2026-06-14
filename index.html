@@ -480,28 +480,35 @@ import qualified Miso.CSS  as CSS
 import qualified Miso.Html as H
 import           Miso.Lens
 ----------------------------------------------------------------------------
+-- | Component model state
 data Model = Model { _count :: Int, _animating :: Bool }
   deriving (Eq)
 ----------------------------------------------------------------------------
+-- | Lenses for model fields
 count :: Lens Model Int
 count = lens _count (\\m c -> m { _count = c })
 
 animating :: Lens Model Bool
 animating = lens _animating (\\m a -> m { _animating = a })
 ----------------------------------------------------------------------------
+-- | Sum type for App events
 data Action
   = AddOne | SubtractOne | SayHelloWorld | ToggleAnim
   deriving (Show, Eq)
 ----------------------------------------------------------------------------
+-- | Entry point for a miso application
 main :: IO ()
 main = startApp defaultEvents app
 ----------------------------------------------------------------------------
+-- | Application definition: initial model, update, and view
 app :: App Model Action
 app = (vcomp emptyModel updateModel viewModel) { mountPoint = Just "app" }
 ----------------------------------------------------------------------------
+-- | Initial application state
 emptyModel :: Model
 emptyModel = Model { _count = 0, _animating = True }
 ----------------------------------------------------------------------------
+-- | Updates model, optionally introduces side effects
 updateModel :: Action -> Effect parent props Model Action
 updateModel = \\case
   AddOne        -> count    += 1
@@ -509,6 +516,7 @@ updateModel = \\case
   ToggleAnim    -> animating %= not
   SayHelloWorld -> io_ (alert "Hello world" >> putStrLn "Hello World")
 ----------------------------------------------------------------------------
+-- | Helper for rendering a styled icon button
 iconBtn :: Action -> MisoString -> View Model Action
 iconBtn action label =
   H.button_
@@ -522,6 +530,7 @@ iconBtn action label =
     ]
     [ text label ]
 ----------------------------------------------------------------------------
+-- | Constructs a virtual DOM from a model
 viewModel :: props -> Model -> View Model Action
 viewModel _ m =
   H.div_
@@ -533,6 +542,7 @@ viewModel _ m =
     ]
     [ counterSection m, canvasSection m ]
 ----------------------------------------------------------------------------
+-- | Counter section: increment, decrement, and hello world button
 counterSection :: Model -> View Model Action
 counterSection m =
   H.div_
@@ -563,6 +573,7 @@ counterSection m =
         [ text "Say Hello World!" ]
     ]
 ----------------------------------------------------------------------------
+-- | Canvas section: orbiting dot animation with play/pause toggle
 canvasSection :: Model -> View Model Action
 canvasSection m =
   let playState = if _animating m then "running" else "paused"
@@ -602,6 +613,7 @@ canvasSection m =
         [ text (if _animating m then "Stop" else "Start") ]
     ]
 ----------------------------------------------------------------------------
+-- | Renders a dot orbiting at a given radius, speed, and color
 orbitDot :: MisoString -> CSS.Color -> MisoString -> MisoString -> MisoString -> View Model Action
 orbitDot dur color sz offset playState =
   H.div_
