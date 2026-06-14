@@ -55,27 +55,41 @@
       .app {
         flex: 1;
         min-height: 0;
-        display: grid;
-        gap: 0.5rem;
+        display: flex;
         padding: 0.5rem;
       }
-      @media (min-width: 800px) {
-        .app {
-          grid-template-columns: 1fr 1fr;
-        }
-      }
       @media (max-width: 799.98px) {
-        .app {
-          grid-template-rows: 1fr 1fr;
-        }
+        .app { flex-direction: column; gap: 0.5rem; }
+        .splitter { display: none; }
       }
+      .splitter {
+        flex: 0 0 5px;
+        cursor: col-resize;
+        background: #1f2937;
+        border-radius: 3px;
+        margin: 0 3px;
+        transition: background 0.15s;
+      }
+      .splitter:hover, .splitter.active { background: #374151; }
+      .row-splitter {
+        flex: 0 0 5px;
+        cursor: row-resize;
+        background: #1f2937;
+        border-radius: 3px;
+        margin: 3px 0;
+        transition: background 0.15s;
+      }
+      .row-splitter:hover, .row-splitter.active { background: #374151; }
       .pane {
+        flex: 1;
+        min-width: 0;
         background: #111827;
         border: 1px solid #1f2937;
         border-radius: 12px;
         display: flex;
         flex-direction: column;
         min-height: 0;
+        overflow: hidden;
       }
       header {
         padding: 0.5rem 0.75rem;
@@ -94,19 +108,35 @@
         cursor: pointer;
         font-size: 0.85rem;
       }
+      #leftPane  { flex: 65; }
+      #rightPane { flex: 35; }
       #editor {
         flex: 1;
         min-height: 0;
       }
-      .right {
-        padding: 0.6rem;
+      .stdout-wrap {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        gap: 0.25rem;
       }
       .outputs {
-        display: block;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        padding: 0.6rem;
+        gap: 0.35rem;
+        overflow: hidden;
       }
       @keyframes pulse {
         0%, 100% { opacity: 1; }
         50%       { opacity: 0.4; }
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
       }
       .loading {
         padding: 1rem;
@@ -120,21 +150,19 @@
         margin: 0.35rem 0;
       }
       .outputs textarea {
-        display: block;
-        width: 100%;
-        min-height: 20vh;
+        flex: 1;
+        min-height: 0;
         background: #0b1020;
         color: #d1fae5;
         border: 1px solid #223;
         border-radius: 8px;
         padding: 0.6rem;
-        resize: vertical;
+        resize: none;
         box-sizing: border-box;
       }
       #app {
-        display: block;
-        width: 100%;
-        min-height: 30vh;
+        flex: 3;
+        min-height: 0;
         background: #0b1020;
         color: #d1fae5;
         border: 1px solid #223;
@@ -223,6 +251,8 @@
         },
       });
 
+      const completionsP = fetch("./completions.json").then(r => r.json()).catch(() => []);
+
       const rootfs = new PreopenDirectory("/", []);
 
       const bsdtar_wasi = new WASI(
@@ -257,6 +287,49 @@
       }
 
       document.getElementById("editor").innerHTML = "";
+
+      const completions = await completionsP;
+      if (completions.length > 0) {
+        const kindMap = {
+          function:    monaco.languages.CompletionItemKind.Function,
+          type:        monaco.languages.CompletionItemKind.Struct,
+          constructor: monaco.languages.CompletionItemKind.EnumMember,
+          typeclass:   monaco.languages.CompletionItemKind.Interface,
+          operator:    monaco.languages.CompletionItemKind.Operator,
+        };
+        monaco.languages.registerCompletionItemProvider("haskell", {
+          triggerCharacters: ["."],
+          provideCompletionItems(model, position) {
+            const word = model.getWordUntilPosition(position);
+            const range = {
+              startLineNumber: position.lineNumber,
+              endLineNumber:   position.lineNumber,
+              startColumn:     word.startColumn,
+              endColumn:       word.endColumn,
+            };
+            // Check for a qualifier immediately before the cursor: "H." or "CSS."
+            const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+            const qualMatch  = linePrefix.match(/([A-Z][a-zA-Z0-9_']*)\.$/);
+            const qualifier  = qualMatch ? qualMatch[1] : null;
+            const candidates = qualifier
+              ? completions.filter(c => c.module.split(".").includes(qualifier))
+              : completions;
+            return {
+              suggestions: candidates.map(c => ({
+                label:         c.name,
+                kind:          kindMap[c.kind] ?? monaco.languages.CompletionItemKind.Function,
+                detail:        c.module + (c.type ? ` :: ${c.type}` : ""),
+                documentation: c.type
+                  ? { value: "```haskell\n" + c.name + " :: " + c.type + "\n```" }
+                  : undefined,
+                insertText: c.name,
+                range,
+              })),
+            };
+          },
+        });
+      }
+
       window.editor = monaco.editor.create(document.getElementById("editor"), {
         value: `----------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
@@ -269,114 +342,145 @@ import qualified Miso.CSS  as CSS
 import qualified Miso.Html as H
 import           Miso.Lens
 ----------------------------------------------------------------------------
--- | Application model
-type Model = Int
+data Model = Model { _count :: Int, _animating :: Bool }
+  deriving (Eq)
 ----------------------------------------------------------------------------
--- | Sum type for App events
+count :: Lens Model Int
+count = lens _count (\\m c -> m { _count = c })
+
+animating :: Lens Model Bool
+animating = lens _animating (\\m a -> m { _animating = a })
+----------------------------------------------------------------------------
 data Action
-  = AddOne
-  -- ^ Increment the counter
-  | SubtractOne
-  -- ^ Decrement the counter
-  | SayHelloWorld
-  -- ^ Show a greeting alert
+  = AddOne | SubtractOne | SayHelloWorld | ToggleAnim
   deriving (Show, Eq)
 ----------------------------------------------------------------------------
--- | Entry point for a miso application
 main :: IO ()
 main = startApp defaultEvents app
 ----------------------------------------------------------------------------
--- | Application component, mounts into #app
 app :: App Model Action
 app = (vcomp emptyModel updateModel viewModel) { mountPoint = Just "app" }
 ----------------------------------------------------------------------------
--- | Initial application state
 emptyModel :: Model
-emptyModel = 0
+emptyModel = Model { _count = 0, _animating = True }
 ----------------------------------------------------------------------------
--- | Updates model, optionally introduces side effects
-updateModel
-  :: Action
-  -> Effect parent props Model Action
+updateModel :: Action -> Effect parent props Model Action
 updateModel = \\case
-  AddOne        -> this += 1
-  SubtractOne   -> this -= 1
+  AddOne        -> count    += 1
+  SubtractOne   -> count    -= 1
+  ToggleAnim    -> animating %= not
   SayHelloWorld -> io_ (alert "Hello world" >> putStrLn "Hello World")
 ----------------------------------------------------------------------------
--- | Styled icon button
-iconBtn
-  :: Action
-  -- ^ Action to dispatch on click
-  -> MisoString
-  -- ^ Button label
-  -> View Model Action
+iconBtn :: Action -> MisoString -> View Model Action
 iconBtn action label =
   H.button_
     [ H.onClick action
     , CSS.style_
-        [ CSS.fontSize "1.5rem"
-        , CSS.width "3rem"
-        , CSS.height "3rem"
-        , CSS.border "none"
-        , CSS.borderRadius "10px"
+        [ CSS.fontSize "1.5rem", CSS.width "3rem", CSS.height "3rem"
+        , CSS.border "none", CSS.borderRadius "10px"
         , CSS.backgroundColor (CSS.hex "1e293b")
-        , CSS.color (CSS.hex "e5e7eb")
-        , CSS.cursor "pointer"
-        , CSS.fontWeight "700"
+        , CSS.color (CSS.hex "e5e7eb"), CSS.cursor "pointer", CSS.fontWeight "700"
         ]
     ]
     [ text label ]
 ----------------------------------------------------------------------------
--- | Constructs a virtual DOM from a model
-viewModel
-  :: props
-  -> Model
-  -> View Model Action
-viewModel _ x =
+viewModel :: props -> Model -> View Model Action
+viewModel _ m =
   H.div_
     [ CSS.style_
-        [ CSS.display "flex"
-        , CSS.flexDirection "column"
-        , CSS.alignItems "center"
-        , CSS.gap "1.5rem"
-        , CSS.padding "2rem"
-        , CSS.fontFamily "system-ui, sans-serif"
+        [ CSS.display "flex", CSS.flexDirection "row", CSS.alignItems "center"
+        , CSS.justifyContent "center", CSS.gap "4rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ counterSection m, canvasSection m ]
+----------------------------------------------------------------------------
+counterSection :: Model -> View Model Action
+counterSection m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
         ]
     ]
     [ H.span_
         [ CSS.style_
-            [ CSS.fontSize "5rem"
-            , CSS.fontWeight "700"
-            , CSS.color (CSS.hex "22c55e")
-            , CSS.lineHeight "1"
-            , CSS.minWidth "4rem"
-            , CSS.textAlign "center"
+            [ CSS.fontSize "5rem", CSS.fontWeight "700"
+            , CSS.color (CSS.hex "22c55e"), CSS.lineHeight "1"
+            , CSS.minWidth "4rem", CSS.textAlign "center"
             ]
         ]
-        [ text $ ms x ]
-    , H.div_
-        [ CSS.style_
-            [ CSS.display "flex"
-            , CSS.gap "0.75rem"
-            ]
-        ]
-        [ iconBtn SubtractOne "-"
-        , iconBtn AddOne      "+"
-        ]
+        [ text $ ms (_count m) ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
+        [ iconBtn SubtractOne "-", iconBtn AddOne "+" ]
     , H.button_
         [ H.onClick SayHelloWorld
         , CSS.style_
-            [ CSS.padding "0.5rem 1.25rem"
-            , CSS.border "none"
-            , CSS.borderRadius "10px"
-            , CSS.backgroundColor (CSS.hex "22c55e")
-            , CSS.color (CSS.hex "fff")
-            , CSS.fontWeight "600"
-            , CSS.cursor "pointer"
-            , CSS.fontSize "0.9rem"
+            [ CSS.padding "0.5rem 1.25rem", CSS.border "none"
+            , CSS.borderRadius "10px", CSS.backgroundColor (CSS.hex "22c55e")
+            , CSS.color (CSS.hex "fff"), CSS.fontWeight "600"
+            , CSS.cursor "pointer", CSS.fontSize "0.9rem"
             ]
         ]
         [ text "Say Hello World!" ]
+    ]
+----------------------------------------------------------------------------
+canvasSection :: Model -> View Model Action
+canvasSection m =
+  let playState = if _animating m then "running" else "paused"
+  in H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1rem"
+        ]
+    ]
+    [ H.div_
+        [ CSS.style_
+            [ CSS.position "relative", CSS.width "120px", CSS.height "120px"
+            , CSS.borderRadius "50%", CSS.backgroundColor (CSS.hex "0b1120")
+            , CSS.border "1px solid #1f2937"
+            ]
+        ]
+        [ H.div_
+            [ CSS.style_
+                [ CSS.position "absolute", CSS.width "10px", CSS.height "10px"
+                , CSS.borderRadius "50%", CSS.backgroundColor (CSS.hex "22c55e")
+                , CSS.top "50%", CSS.left "50%"
+                , CSS.transform "translate(-50%, -50%)"
+                ]
+            ] []
+        , orbitDot "1.8s" (CSS.hex "818cf8") "12px" "40px" playState
+        , orbitDot "2.9s" (CSS.hex "f59e0b") "8px"  "26px" playState
+        ]
+    , H.button_
+        [ H.onClick ToggleAnim
+        , CSS.style_
+            [ CSS.padding "0.4rem 1.1rem", CSS.border "none", CSS.borderRadius "8px"
+            , CSS.backgroundColor (CSS.hex (if _animating m then "ef4444" else "6366f1"))
+            , CSS.color (CSS.hex "fff"), CSS.fontWeight "600"
+            , CSS.cursor "pointer", CSS.fontSize "0.85rem"
+            ]
+        ]
+        [ text (if _animating m then "Stop" else "Start") ]
+    ]
+----------------------------------------------------------------------------
+orbitDot :: MisoString -> CSS.Color -> MisoString -> MisoString -> MisoString -> View Model Action
+orbitDot dur color sz offset playState =
+  H.div_
+    [ CSS.style_
+        [ CSS.position "absolute", CSS.top "50%", CSS.left "50%"
+        , CSS.width "0", CSS.height "0"
+        , CSS.animation ("spin " <> dur <> " linear infinite")
+        , ("animation-play-state", playState)
+        ]
+    ]
+    [ H.div_
+        [ CSS.style_
+            [ CSS.position "absolute", CSS.width sz, CSS.height sz
+            , CSS.borderRadius "50%", CSS.backgroundColor color
+            , CSS.top ("-6px"), CSS.left offset
+            ]
+        ] []
     ]
 ----------------------------------------------------------------------------
 `,
@@ -424,6 +528,58 @@ viewModel _ x =
       document.getElementById("runBtn").textContent = "Run";
       document.getElementById("app").innerHTML = "";
       document.getElementById("runBtn").click();
+
+      // Draggable splitter between left and right panes
+      const splitter = document.getElementById("splitter");
+      const leftPane  = document.getElementById("leftPane");
+      const rightPane = document.getElementById("rightPane");
+      splitter.addEventListener("mousedown", e => {
+        e.preventDefault();
+        splitter.classList.add("active");
+        const startX  = e.clientX;
+        const leftW0  = leftPane.getBoundingClientRect().width;
+        const rightW0 = rightPane.getBoundingClientRect().width;
+        const total   = leftW0 + rightW0;
+        const onMove = e => {
+          const newLeft  = Math.max(180, Math.min(total - 180, leftW0 + e.clientX - startX));
+          leftPane.style.flex  = `0 0 ${newLeft}px`;
+          rightPane.style.flex = `0 0 ${total - newLeft}px`;
+          window.editor?.layout();
+        };
+        const onUp = () => {
+          splitter.classList.remove("active");
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+          window.editor?.layout();
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+
+      // Draggable splitter between #app and #stdout
+      const rowSplitter  = document.getElementById("rowSplitter");
+      const appDiv       = document.getElementById("app");
+      const stdoutSection = document.getElementById("stdoutSection");
+      rowSplitter.addEventListener("mousedown", e => {
+        e.preventDefault();
+        rowSplitter.classList.add("active");
+        const startY  = e.clientY;
+        const appH0   = appDiv.getBoundingClientRect().height;
+        const stdoutH0 = stdoutSection.getBoundingClientRect().height;
+        const totalH  = appH0 + stdoutH0;
+        const onMove = e => {
+          const newTop = Math.max(60, Math.min(totalH - 60, appH0 + e.clientY - startY));
+          appDiv.style.flex       = `0 0 ${newTop}px`;
+          stdoutSection.style.flex = `0 0 ${totalH - newTop}px`;
+        };
+        const onUp = () => {
+          rowSplitter.classList.remove("active");
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
     </script>
   </head>
   <body>
@@ -432,7 +588,7 @@ viewModel _ x =
       <p>A tasty Haskell web framework, running live in WebAssembly</p>
     </div>
     <div class="app">
-      <section class="pane">
+      <section class="pane" id="leftPane">
         <header>
           🍜 Miso Source
           <button id="runBtn" disabled="true">Loading…</button>
@@ -440,16 +596,21 @@ viewModel _ x =
         <div id="editor"><div class="loading">Loading rootfs…</div></div>
       </section>
 
-      <section class="pane right">
+      <div class="splitter" id="splitter"></div>
+
+      <section class="pane right" id="rightPane">
         <header>Output</header>
         <div class="outputs">
           <div id="app"><div class="loading">Loading WebAssembly runtime…</div></div>
-          <div class="label">stdout</div>
-          <textarea
-            id="stdout"
-            readonly
-            style="font-family: ui-monospace, Menlo, Consolas, monospace"
-          ></textarea>
+          <div class="row-splitter" id="rowSplitter"></div>
+          <div class="stdout-wrap" id="stdoutSection">
+            <div class="label">stdout</div>
+            <textarea
+              id="stdout"
+              readonly
+              style="font-family: ui-monospace, Menlo, Consolas, monospace"
+            ></textarea>
+          </div>
         </div>
       </section>
     </div>
