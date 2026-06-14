@@ -1,7 +1,7 @@
 # :ramen: try miso
 
 <a href="https://try.haskell-miso.org">
-  <img width="1418" height="655" alt="image" src="https://github.com/user-attachments/assets/0e46d65e-da3c-45e9-88dc-c34f07081dae" />
+  <img width="1256" height="794" alt="image" src="https://github.com/user-attachments/assets/efa78724-0bba-4c0a-aad5-db95f6e5dced" />
 </a>
 
 ## Intro
