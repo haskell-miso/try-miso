@@ -592,6 +592,8 @@ orbitDot dur color sz offset playState =
         fontSize: 14,
       });
 
+      let stderrLines = [];
+
       const dyld = await main({
         rpc: new DyLDBrowserHost({
           rootfs,
@@ -600,6 +602,7 @@ orbitDot dur color sz offset playState =
           },
           stderr: (msg) => {
             document.getElementById("stdout").value += `${msg}\n`;
+            stderrLines.push(msg);
           },
         }),
         searchDirs: [
@@ -612,8 +615,49 @@ orbitDot dur color sz offset playState =
       });
       const main_func = await dyld.exportFuncs.myMain("/tmp/hslib/lib");
 
+      function parseGhcDiagnostics(lines) {
+        // /tmp/Main.hs:LINE:COL: error: or /tmp/Main.hs:LINE:SCOL-ECOL: error: [GHC-XXXXX]
+        const diagRe = /^[^:]+:(\d+):(\d+)(?:-(\d+))?\s*:\s*(error|warning)(?:\s*\[.*?\])?\s*:/;
+        const markers = [];
+        let i = 0;
+        while (i < lines.length) {
+          const raw = lines[i].replace(/\x1b\[[0-9;]*m/g, "");
+          const m = diagRe.exec(raw);
+          if (m) {
+            const startLine = parseInt(m[1]);
+            const startCol  = parseInt(m[2]);
+            const endCol    = m[3] ? parseInt(m[3]) + 1 : startCol + 1;
+            const severity  = m[4] === "error"
+              ? monaco.MarkerSeverity.Error
+              : monaco.MarkerSeverity.Warning;
+            const afterLabel = raw.slice(raw.indexOf(m[4]) + m[4].length).replace(/^\s*(?:\[.*?\])?\s*:\s*/, "");
+            const msgLines = afterLabel.trim() ? [afterLabel.trim()] : [];
+            i++;
+            while (i < lines.length) {
+              const next = lines[i].replace(/\x1b\[[0-9;]*m/g, "");
+              if (/^\s/.test(next)) { msgLines.push(next.trimStart()); i++; }
+              else break;
+            }
+            markers.push({
+              severity,
+              startLineNumber: startLine,
+              startColumn:     startCol,
+              endLineNumber:   startLine,
+              endColumn:       endCol,
+              message:         msgLines.join("\n").trim(),
+              source:          "GHC",
+            });
+          } else {
+            i++;
+          }
+        }
+        return markers;
+      }
+
       document.getElementById("runBtn").addEventListener("click", async () => {
         document.getElementById("runBtn").disabled = true;
+        stderrLines = [];
+        monaco.editor.setModelMarkers(window.editor.getModel(), "ghc", []);
 
         try {
           document.getElementById("stdout").value = "";
@@ -621,6 +665,10 @@ orbitDot dur color sz offset playState =
 
           await main_func("-package miso -Wno-missed-extra-shared-lib", editor.getValue());
         } finally {
+          monaco.editor.setModelMarkers(
+            window.editor.getModel(), "ghc",
+            parseGhcDiagnostics(stderrLines),
+          );
           document.getElementById("runBtn").disabled = false;
         }
       });
