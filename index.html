@@ -17,6 +17,10 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.min.css"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/monaco-editor/min/vs/editor/editor.main.css"
+    />
     <style>
       html,
       body {
@@ -173,6 +177,11 @@
       }
     </style>
 
+    <script>
+      window.MonacoEnvironment = {
+        getWorkerUrl: () => URL.createObjectURL(new Blob([''], { type: 'text/javascript' }))
+      };
+    </script>
     <script async type="module">
       import * as monaco from "https://cdn.jsdelivr.net/npm/monaco-editor/+esm";
       import {
@@ -289,33 +298,69 @@
       document.getElementById("editor").innerHTML = "";
 
       const completions = await completionsP;
-      if (completions.length > 0) {
-        const kindMap = {
-          function:    monaco.languages.CompletionItemKind.Function,
-          type:        monaco.languages.CompletionItemKind.Struct,
-          constructor: monaco.languages.CompletionItemKind.EnumMember,
-          typeclass:   monaco.languages.CompletionItemKind.Interface,
-          operator:    monaco.languages.CompletionItemKind.Operator,
-        };
-        monaco.languages.registerCompletionItemProvider("haskell", {
-          triggerCharacters: ["."],
-          provideCompletionItems(model, position) {
-            const word = model.getWordUntilPosition(position);
-            const range = {
-              startLineNumber: position.lineNumber,
-              endLineNumber:   position.lineNumber,
-              startColumn:     word.startColumn,
-              endColumn:       word.endColumn,
-            };
-            // Check for a qualifier immediately before the cursor: "H." or "CSS."
-            const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
-            const qualMatch  = linePrefix.match(/([A-Z][a-zA-Z0-9_']*)\.$/);
-            const qualifier  = qualMatch ? qualMatch[1] : null;
-            const candidates = qualifier
-              ? completions.filter(c => c.module.split(".").includes(qualifier))
-              : completions;
-            return {
-              suggestions: candidates.map(c => ({
+      const kindMap = {
+        function:    monaco.languages.CompletionItemKind.Function,
+        type:        monaco.languages.CompletionItemKind.Struct,
+        constructor: monaco.languages.CompletionItemKind.EnumMember,
+        typeclass:   monaco.languages.CompletionItemKind.Interface,
+        operator:    monaco.languages.CompletionItemKind.Operator,
+      };
+      const hsKeywords = [
+        "module", "where", "import", "qualified", "as", "hiding",
+        "data", "newtype", "type", "class", "instance", "deriving",
+        "let", "in", "do", "case", "of", "if", "then", "else",
+        "infixl", "infixr", "infix", "forall", "foreign",
+      ];
+      monaco.languages.registerCompletionItemProvider("haskell", {
+        triggerCharacters: ["."],
+        provideCompletionItems(model, position) {
+          const word = model.getWordUntilPosition(position);
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber:   position.lineNumber,
+            startColumn:     word.startColumn,
+            endColumn:       word.endColumn,
+          };
+
+          // Build alias → full module map from import statements in the file
+          const text = model.getValue();
+          const aliasMap = {};
+          const importRe = /^\s*import\s+(?:qualified\s+)?([A-Z][a-zA-Z0-9_.']*)\s+(?:as\s+([A-Z][a-zA-Z0-9_']*)\s*)?/gm;
+          let im;
+          while ((im = importRe.exec(text)) !== null) {
+            const modName = im[1];
+            const alias   = im[2] || modName.split(".").pop();
+            aliasMap[alias] = modName;
+          }
+
+          // Check for a qualifier immediately before the cursor: "H." or "CSS."
+          const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+          const qualMatch  = linePrefix.match(/([A-Z][a-zA-Z0-9_']*)\.$/);
+          const qualifier  = qualMatch ? qualMatch[1] : null;
+
+          let libSuggestions;
+          if (qualifier) {
+            const resolved = aliasMap[qualifier];
+            libSuggestions = completions.filter(c =>
+              resolved
+                ? c.module === resolved || c.module.startsWith(resolved + ".")
+                : c.module.split(".").includes(qualifier)
+            );
+          } else {
+            libSuggestions = completions;
+          }
+
+          const kwSuggestions = qualifier ? [] : hsKeywords.map(kw => ({
+            label:      kw,
+            kind:       monaco.languages.CompletionItemKind.Keyword,
+            insertText: kw,
+            range,
+          }));
+
+          return {
+            suggestions: [
+              ...kwSuggestions,
+              ...libSuggestions.map(c => ({
                 label:         c.name,
                 kind:          kindMap[c.kind] ?? monaco.languages.CompletionItemKind.Function,
                 detail:        c.module + (c.type ? ` :: ${c.type}` : ""),
@@ -325,10 +370,10 @@
                 insertText: c.name,
                 range,
               })),
-            };
-          },
-        });
-      }
+            ],
+          };
+        },
+      });
 
       window.editor = monaco.editor.create(document.getElementById("editor"), {
         value: `----------------------------------------------------------------------------
