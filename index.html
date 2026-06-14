@@ -333,6 +333,25 @@
             endColumn:       word.endColumn,
           };
 
+          // On an import line, offer module names instead of symbols
+          const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+          const importPrefixMatch = linePrefix.match(/^\s*import\s+(?:qualified\s+)?([A-Z][a-zA-Z0-9_.]*)\.$/);
+          if (importPrefixMatch) {
+            const modPrefix = importPrefixMatch[1] + ".";
+            const moduleNames = [...new Set(completions.map(c => c.module))].sort();
+            return {
+              suggestions: moduleNames
+                .filter(m => m.startsWith(modPrefix))
+                .map(m => ({
+                  label:      m,
+                  kind:       monaco.languages.CompletionItemKind.Module,
+                  detail:     "module",
+                  insertText: m.slice(modPrefix.length),
+                  range,
+                })),
+            };
+          }
+
           // Build alias → full module map from import statements in the file
           const text = model.getValue();
           const aliasMap = {};
@@ -345,7 +364,6 @@
           }
 
           // Check for a qualifier immediately before the cursor: "H." or "CSS."
-          const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
           const qualMatch  = linePrefix.match(/([A-Z][a-zA-Z0-9_']*)\.$/);
           const qualifier  = qualMatch ? qualMatch[1] : null;
 
