@@ -1,9 +1,9 @@
-# :ramen: ghc-in-browser
+# :ramen: try miso
 
 See [live](https://try.haskell-miso.org)
 
 <a href="https://try.haskell-miso.org">
-  <img width="463" alt="Try miso — Haskell web framework running in WebAssembly" src="https://github.com/user-attachments/assets/671e3140-4dc6-4151-8a3f-fa64066e8582" />
+  <img width="1248" height="593" alt="image" src="https://github.com/user-attachments/assets/b1d24f3b-f00c-4626-87c9-5252270f93c7" />
 </a>
 
 An interactive [miso](https://haskell-miso.org) playground running entirely in the browser. Write Haskell, click **Run**, and see your miso app rendered live — no install required. Powered by GHC compiled to WebAssembly.
@@ -16,7 +16,7 @@ An interactive [miso](https://haskell-miso.org) playground running entirely in t
 
 ## Credits
 
-Made possible by the [GHC API browser project](https://github.com/ghc/ghc/blob/master/testsuite/tests/ghc-api-browser/playground001.hs) — thanks to [@terrorjack](https://github.com/terrorjack) for the foundational work on running GHC in the browser via WebAssembly.
+Made possible by the [GHC API browser project](https://github.com/ghc/ghc/blob/master/testsuite/tests/ghc-api-browser) — thanks to [@terrorjack](https://github.com/terrorjack) for the foundational work on running GHC in the browser via WebAssembly.
 
 ## Build and run
 
