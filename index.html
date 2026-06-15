@@ -334,7 +334,34 @@
         WASI,
       } from "https://esm.sh/gh/haskell-wasm/browser_wasi_shim";
       import { DyLDBrowserHost, main } from "./dyld.mjs";
-      import LZString from "https://cdn.jsdelivr.net/npm/lz-string/+esm";
+      async function compressToHash(text) {
+        const bytes = new TextEncoder().encode(text);
+        const cs = new CompressionStream("deflate-raw");
+        const writer = cs.writable.getWriter();
+        writer.write(bytes);
+        writer.close();
+        const buf = await new Response(cs.readable).arrayBuffer();
+        let bin = "";
+        for (const b of new Uint8Array(buf)) bin += String.fromCharCode(b);
+        return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+      }
+
+      async function decompressFromHash(hash) {
+        try {
+          const b64 = hash.replace(/-/g, "+").replace(/_/g, "/");
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const ds = new DecompressionStream("deflate-raw");
+          const writer = ds.writable.getWriter();
+          writer.write(bytes);
+          writer.close();
+          const buf = await new Response(ds.readable).arrayBuffer();
+          return new TextDecoder().decode(buf);
+        } catch {
+          return null;
+        }
+      }
 
       const isMobile = /Mobi|Android/i.test(navigator.userAgent) || window.innerWidth < 800;
 
@@ -765,8 +792,11 @@ orbitDot dur color sz offset playState =
       const hash = window.location.hash.slice(1);
       let initialSource = defaultSource;
       if (hash) {
-        const decoded = LZString.decompressFromEncodedURIComponent(hash);
-        if (decoded) initialSource = decoded;
+        const decoded = await decompressFromHash(hash);
+        if (decoded) {
+          initialSource = decoded;
+          history.replaceState(null, "", window.location.pathname + window.location.search);
+        }
       }
 
       window.editor = monaco.editor.create(document.getElementById("editor"), {
@@ -880,7 +910,7 @@ orbitDot dur color sz offset playState =
 
       shareBtn.disabled = false;
       shareBtn.addEventListener("click", async () => {
-        const compressed = LZString.compressToEncodedURIComponent(editor.getValue());
+        const compressed = await compressToHash(editor.getValue());
         const shareUrl = `${window.location.origin}${window.location.pathname}#${compressed}`;
         shareUrlInput.value = shareUrl;
         await navigator.clipboard.writeText(shareUrl).catch(() => {});
