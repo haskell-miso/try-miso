@@ -334,6 +334,7 @@
         WASI,
       } from "https://esm.sh/gh/haskell-wasm/browser_wasi_shim";
       import { DyLDBrowserHost, main } from "./dyld.mjs";
+      import LZString from "https://cdn.jsdelivr.net/npm/lz-string/+esm";
 
       const isMobile = /Mobi|Android/i.test(navigator.userAgent) || window.innerWidth < 800;
 
@@ -761,13 +762,11 @@ orbitDot dur color sz offset playState =
 ----------------------------------------------------------------------------
 `;
 
-      const pasteId = new URLSearchParams(window.location.search).get('paste');
+      const hash = window.location.hash.slice(1);
       let initialSource = defaultSource;
-      if (pasteId) {
-        try {
-          const resp = await fetch(`https://paste.rs/${encodeURIComponent(pasteId)}`);
-          if (resp.ok) initialSource = await resp.text();
-        } catch {}
+      if (hash) {
+        const decoded = LZString.decompressFromEncodedURIComponent(hash);
+        if (decoded) initialSource = decoded;
       }
 
       window.editor = monaco.editor.create(document.getElementById("editor"), {
@@ -881,24 +880,11 @@ orbitDot dur color sz offset playState =
 
       shareBtn.disabled = false;
       shareBtn.addEventListener("click", async () => {
-        shareBtn.disabled = true;
-        try {
-          const resp = await fetch("https://paste.rs/", {
-            method: "POST",
-            body: editor.getValue(),
-          });
-          if (!resp.ok) throw new Error(`paste.rs returned ${resp.status}`);
-          const pasteUrl = (await resp.text()).trim();
-          const id = pasteUrl.split("/").pop();
-          const shareUrl = `${window.location.origin}${window.location.pathname}?paste=${id}`;
-          shareUrlInput.value = shareUrl;
-          await navigator.clipboard.writeText(shareUrl).catch(() => {});
-          shareModal.classList.add("open");
-        } catch (err) {
-          alert("Failed to create share link: " + err.message);
-        } finally {
-          shareBtn.disabled = false;
-        }
+        const compressed = LZString.compressToEncodedURIComponent(editor.getValue());
+        const shareUrl = `${window.location.origin}${window.location.pathname}#${compressed}`;
+        shareUrlInput.value = shareUrl;
+        await navigator.clipboard.writeText(shareUrl).catch(() => {});
+        shareModal.classList.add("open");
       });
 
       document.getElementById("closeShareModal").addEventListener("click", () => {
