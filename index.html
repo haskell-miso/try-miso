@@ -21,6 +21,9 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/monaco-editor/min/vs/editor/editor.main.css"
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Source+Code+Pro:wght@400;500&display=swap" />
     <style>
       html,
       body {
@@ -295,6 +298,7 @@
         padding: 0.6rem;
         box-sizing: border-box;
         overflow: auto;
+        position: relative;
       }
       @media (max-width: 799.98px) {
         html, body {
@@ -344,6 +348,45 @@
         .topbar p {
           display: none;
         }
+        .font-controls { display: none; }
+      }
+      .editor-ctrl-btn {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.2rem 0.45rem;
+        color: #9ca3af;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        line-height: 1.4;
+        transition: color 0.15s, border-color 0.15s;
+        white-space: nowrap;
+      }
+      .editor-ctrl-btn:hover { color: #e5e7eb; border-color: #4b5563; }
+      .editor-ctrl-btn.active { color: #22c55e; border-color: #22c55e; }
+      .editor-ctrl-select {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.2rem 0.35rem;
+        color: #9ca3af;
+        font-size: 0.75rem;
+        cursor: pointer;
+        outline: none;
+        max-width: 10rem;
+      }
+      .editor-ctrl-select:hover { border-color: #4b5563; }
+      .editor-ctrl-divider {
+        width: 1px;
+        height: 1.25em;
+        background: #374151;
+        flex-shrink: 0;
+      }
+      .font-controls {
+        display: flex;
+        gap: 0.25rem;
+        align-items: center;
       }
     </style>
 
@@ -682,11 +725,11 @@ data Action
 ----------------------------------------------------------------------------
 -- | Entry point for a miso application
 main :: IO ()
-main = startApp defaultEvents app
+main = startApp defaultEvents app { mountPoint = Just "app" }
 ----------------------------------------------------------------------------
 -- | Application definition: initial model, update, and view
 app :: App Model Action
-app = (vcomp emptyModel updateModel viewModel) { mountPoint = Just "app" }
+app = vcomp emptyModel updateModel viewModel
 ----------------------------------------------------------------------------
 -- | Initial application state
 emptyModel :: Model
@@ -819,15 +862,725 @@ orbitDot dur color sz offset playState =
 ----------------------------------------------------------------------------
 `;
 
+      const helloExample = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Miso
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App () ()
+app = vcomp () noop (\\_ _ -> "Hello, miso! 🍜")
+----------------------------------------------------------------------------
+`;
+
+      const inputExample = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import qualified Miso.CSS  as CSS
+import qualified Miso.Html as H
+import qualified Miso.Html.Property as P
+import           Miso.Lens
+----------------------------------------------------------------------------
+data Model = Model { _text :: MisoString }
+  deriving (Eq)
+----------------------------------------------------------------------------
+txt :: Lens Model MisoString
+txt = lens _text (\\m s -> m { _text = s })
+----------------------------------------------------------------------------
+data Action = SetText MisoString
+  deriving (Show, Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp emptyModel updateModel viewModel
+----------------------------------------------------------------------------
+emptyModel :: Model
+emptyModel = Model { _text = "world" }
+----------------------------------------------------------------------------
+updateModel :: Action -> Effect parent props Model Action
+updateModel = \\case
+  SetText s -> txt .= s
+----------------------------------------------------------------------------
+viewModel :: props -> Model -> View Model Action
+viewModel _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.justifyContent "center"
+        , CSS.height "100%", CSS.gap "1.5rem"
+        , CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.h1_
+        [ CSS.style_
+            [ CSS.fontSize "2.5rem", CSS.margin "0"
+            , CSS.color (CSS.hex "22c55e"), CSS.fontWeight "700"
+            ]
+        ]
+        [ text ("Hello, " <> m ^. txt <> "!") ]
+    , H.input_
+        [ H.onInput SetText
+        , P.value_ (m ^. txt)
+        , CSS.style_
+            [ CSS.padding "0.5rem 1rem", CSS.borderRadius "8px"
+            , CSS.border "1px solid #334155"
+            , CSS.background "#1e293b"
+            , CSS.color (CSS.hex "e5e7eb"), CSS.fontSize "1.1rem"
+            , "outline" =: "none"
+            ]
+        ]
+    ]
+`;
+
+      const tetrisExample = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Control.Concurrent (threadDelay)
+import           Control.Monad (forever)
+import           Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IM
+import           Data.IntSet (IntSet)
+import qualified Data.IntSet as IS
+import           Data.List (foldl')
+import           Data.Maybe (isNothing)
+----------------------------------------------------------------------------
+import           Miso hiding ((!!), Phase)
+import qualified Miso.Html as H
+import qualified Miso.Html.Property as HP
+import qualified Miso.Svg as SV
+import qualified Miso.Svg.Property as SP
+import qualified Miso.CSS as CSS
+import           Miso.String (MisoString, ms)
+import           Miso.Subscription.Keyboard (keyboardSub)
+----------------------------------------------------------------------------
+-- Board constants
+boardW, boardH, cellSz :: Int
+boardW = 10
+boardH = 20
+cellSz = 30
+
+previewSz :: Int
+previewSz = 24
+----------------------------------------------------------------------------
+-- Types
+data TColor
+  = TCyan | TYellow | TPurple | TGreen | TRed | TBlue | TOrange
+  deriving (Show, Eq)
+
+data PType
+  = IPiece | OPiece | TPiece | SPiece | ZPiece | JPiece | LPiece
+  deriving (Show, Eq, Enum, Bounded)
+
+data Piece = Piece
+  { pType :: PType
+  , pX    :: Int
+  , pY    :: Int
+  , pRot  :: Int
+  } deriving (Show, Eq)
+
+data Phase = Playing | Paused | GameOver
+  deriving (Show, Eq)
+
+type Board = [[Maybe TColor]]
+
+data Model = Model
+  { mBoard      :: Board
+  , mCur        :: Maybe Piece
+  , mNext       :: PType
+  , mScore      :: Int
+  , mLevel      :: Int
+  , mLines      :: Int
+  , mPhase      :: Phase
+  , mTick       :: Int
+  , mHeldKeys   :: IntSet
+  , mKeyTimers  :: IntMap Int
+  , mRng        :: Int
+  } deriving (Show, Eq)
+
+data Action
+  = Tick
+  | Keys IntSet
+  | Restart
+  deriving (Show, Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = (component initModel updateModel viewModel)
+  { subs = [keyboardSub Keys, tickSub] }
+----------------------------------------------------------------------------
+tickSub :: Sub Action
+tickSub sink = forever $ threadDelay 50000 >> sink Tick
+----------------------------------------------------------------------------
+-- Pure LCG for randomness
+nextRng :: Int -> (Int, Int)
+nextRng seed =
+  let s = abs ((seed * 1664525 + 1013904223) \`mod\` 0x7fffffff)
+  in (s \`mod\` 7, s)
+
+randPType :: Int -> (PType, Int)
+randPType rng =
+  let (n, rng') = nextRng rng
+  in ([IPiece, OPiece, TPiece, SPiece, ZPiece, JPiece, LPiece] !! n, rng')
+----------------------------------------------------------------------------
+emptyBoard :: Board
+emptyBoard = replicate boardH (replicate boardW Nothing)
+
+mkModel :: Int -> Model
+mkModel seed =
+  let (next, rng1) = randPType seed
+      (pt,   rng2) = randPType rng1
+  in Model
+       { mBoard      = emptyBoard
+       , mCur        = Just (spawnPiece pt)
+       , mNext       = next
+       , mScore      = 0
+       , mLevel      = 1
+       , mLines      = 0
+       , mPhase      = Playing
+       , mTick       = 0
+       , mHeldKeys   = IS.empty
+       , mKeyTimers  = IM.empty
+       , mRng        = rng2
+       }
+
+initModel :: Model
+initModel = mkModel 42
+----------------------------------------------------------------------------
+-- Piece shapes: (row, col) offsets from (pY, pX)
+pieceShape :: PType -> Int -> [(Int, Int)]
+pieceShape IPiece 0 = [(1,0),(1,1),(1,2),(1,3)]
+pieceShape IPiece 1 = [(0,2),(1,2),(2,2),(3,2)]
+pieceShape IPiece 2 = [(2,0),(2,1),(2,2),(2,3)]
+pieceShape IPiece 3 = [(0,1),(1,1),(2,1),(3,1)]
+pieceShape OPiece _ = [(0,1),(0,2),(1,1),(1,2)]
+pieceShape TPiece 0 = [(0,1),(1,0),(1,1),(1,2)]
+pieceShape TPiece 1 = [(0,1),(1,1),(1,2),(2,1)]
+pieceShape TPiece 2 = [(1,0),(1,1),(1,2),(2,1)]
+pieceShape TPiece 3 = [(0,1),(1,0),(1,1),(2,1)]
+pieceShape SPiece 0 = [(0,1),(0,2),(1,0),(1,1)]
+pieceShape SPiece 1 = [(0,1),(1,1),(1,2),(2,2)]
+pieceShape SPiece 2 = [(1,1),(1,2),(2,0),(2,1)]
+pieceShape SPiece 3 = [(0,0),(1,0),(1,1),(2,1)]
+pieceShape ZPiece 0 = [(0,0),(0,1),(1,1),(1,2)]
+pieceShape ZPiece 1 = [(0,2),(1,1),(1,2),(2,1)]
+pieceShape ZPiece 2 = [(1,0),(1,1),(2,1),(2,2)]
+pieceShape ZPiece 3 = [(0,1),(1,0),(1,1),(2,0)]
+pieceShape JPiece 0 = [(0,0),(1,0),(1,1),(1,2)]
+pieceShape JPiece 1 = [(0,1),(0,2),(1,1),(2,1)]
+pieceShape JPiece 2 = [(1,0),(1,1),(1,2),(2,2)]
+pieceShape JPiece 3 = [(0,1),(1,1),(2,0),(2,1)]
+pieceShape LPiece 0 = [(0,2),(1,0),(1,1),(1,2)]
+pieceShape LPiece 1 = [(0,1),(1,1),(2,1),(2,2)]
+pieceShape LPiece 2 = [(1,0),(1,1),(1,2),(2,0)]
+pieceShape LPiece 3 = [(0,0),(0,1),(1,1),(2,1)]
+pieceShape _      r = pieceShape IPiece (r \`mod\` 4)
+
+pieceCells :: Piece -> [(Int, Int)]
+pieceCells p =
+  [ (pY p + dr, pX p + dc)
+  | (dr, dc) <- pieceShape (pType p) (pRot p \`mod\` 4)
+  ]
+
+pieceColorHex :: PType -> MisoString
+pieceColorHex IPiece = "#00f0f0"
+pieceColorHex OPiece = "#f0f000"
+pieceColorHex TPiece = "#a000f0"
+pieceColorHex SPiece = "#00d000"
+pieceColorHex ZPiece = "#f00000"
+pieceColorHex JPiece = "#2020f0"
+pieceColorHex LPiece = "#f0a000"
+
+pieceToColor :: PType -> TColor
+pieceToColor IPiece = TCyan
+pieceToColor OPiece = TYellow
+pieceToColor TPiece = TPurple
+pieceToColor SPiece = TGreen
+pieceToColor ZPiece = TRed
+pieceToColor JPiece = TBlue
+pieceToColor LPiece = TOrange
+
+colorHex :: TColor -> MisoString
+colorHex TCyan   = "#00f0f0"
+colorHex TYellow = "#f0f000"
+colorHex TPurple = "#a000f0"
+colorHex TGreen  = "#00d000"
+colorHex TRed    = "#f00000"
+colorHex TBlue   = "#2020f0"
+colorHex TOrange = "#f0a000"
+----------------------------------------------------------------------------
+spawnPiece :: PType -> Piece
+spawnPiece pt = Piece { pType = pt, pX = 3, pY = 0, pRot = 0 }
+
+isValid :: Board -> Piece -> Bool
+isValid board p = all cellOk (pieceCells p)
+  where
+    cellOk (r, c) =
+      c >= 0 && c < boardW &&
+      r < boardH &&
+      (r < 0 || isNothing (board !! r !! c))
+
+lockPiece :: Board -> Piece -> Board
+lockPiece board p =
+  foldl' setCell board (pieceCells p)
+  where
+    col = pieceToColor (pType p)
+    setCell b (r, c)
+      | r < 0    = b
+      | otherwise =
+          let (top, row:bot) = splitAt r b
+              (left, _:right) = splitAt c row
+          in top ++ (left ++ Just col : right) : bot
+
+clearLines :: Board -> (Board, Int)
+clearLines board =
+  let kept    = filter (any isNothing) board
+      cleared = boardH - length kept
+      newRows = replicate cleared (replicate boardW Nothing)
+  in (newRows ++ kept, cleared)
+
+lineScore :: Int -> Int -> Int
+lineScore lvl n = lvl * case n of
+  1 -> 100; 2 -> 300; 3 -> 500; 4 -> 800; _ -> 0
+
+ticksPerDrop :: Int -> Int
+ticksPerDrop lvl = max 1 (12 - lvl)
+
+hardDrop :: Board -> Piece -> Piece
+hardDrop board p =
+  let p' = p { pY = pY p + 1 }
+  in if isValid board p' then hardDrop board p' else p
+----------------------------------------------------------------------------
+-- Update
+updateModel :: Action -> Effect parent props Model Action
+updateModel = \\case
+
+  Restart -> modify $ \\m -> mkModel (mRng m * 6364136 + 1442695)
+
+  Keys newKeys -> modify $ \\m ->
+    let prev        = mHeldKeys m
+        justPressed = IS.difference newKeys prev
+        m1          = m { mHeldKeys = newKeys }
+    in case mPhase m1 of
+         GameOver ->
+           if IS.member 82 justPressed  -- R to restart
+             then mkModel (mRng m * 6364136 + 1442695)
+             else m1
+         Paused ->
+           if IS.member 82 justPressed then mkModel (mRng m * 6364136 + 1442695)
+           else if IS.member 80 justPressed then m1 { mPhase = Playing }
+           else m1
+         Playing ->
+           foldl' applyInstantKey m1 (IS.toList justPressed)
+
+  Tick -> modify $ \\m ->
+    case mPhase m of
+      Playing -> processTick m
+      _       -> m
+
+applyInstantKey :: Model -> Int -> Model
+applyInstantKey m = \\case
+  32 -> doHardDrop m
+  80 -> m { mPhase = Paused }
+  82 -> mkModel (mRng m * 6364136 + 1442695)
+  _  -> m
+
+tryMove :: Model -> Int -> Int -> Model
+tryMove m dx dy = case mCur m of
+  Nothing -> m
+  Just p  ->
+    let p' = p { pX = pX p + dx, pY = pY p + dy }
+    in if isValid (mBoard m) p' then m { mCur = Just p' } else m
+
+tryRotate :: Model -> Model
+tryRotate m = case mCur m of
+  Nothing -> m
+  Just p  ->
+    let r' = (pRot p + 1) \`mod\` 4
+        rotated = p { pRot = r' }
+        kicks = [rotated, rotated { pX = pX rotated + 1 }, rotated { pX = pX rotated - 1 }]
+        valid = filter (isValid (mBoard m)) kicks
+    in case valid of
+         (p':_) -> m { mCur = Just p' }
+         []     -> m
+
+doHardDrop :: Model -> Model
+doHardDrop m = case mCur m of
+  Nothing -> m
+  Just p  -> lockAndSpawn m (hardDrop (mBoard m) p)
+
+-- DAS: 6 ticks (~300ms) initial delay, then auto-repeat
+dasDelay :: Int
+dasDelay = 6
+
+-- True on tick 1 (immediate) and then every \`arr\` ticks after the DAS delay
+firesMove :: Int -> Int -> Bool
+firesMove arr t = t == 1 || (t > dasDelay && (t - dasDelay - 1) \`mod\` arr == 0)
+
+processTick :: Model -> Model
+processTick m =
+  let keys      = mHeldKeys m
+      oldTimers = mKeyTimers m
+      newTimers = IM.fromList
+        [ (k, 1 + IM.findWithDefault 0 k oldTimers)
+        | k <- IS.toList keys
+        ]
+      fire arr k = maybe False (firesMove arr) (IM.lookup k newTimers)
+      m1 = if fire    2 37 then tryMove   m  (-1) 0 else m   -- left:   100ms ARR
+      m2 = if fire    2 39 then tryMove   m1   1  0 else m1  -- right:  100ms ARR
+      m3 = if fire    1 40 then tryMove   m2   0  1 else m2  -- down:    50ms ARR
+      m4 = if fire    2 38 then tryRotate m3        else m3  -- rotate: 100ms ARR
+      m5 = m4 { mKeyTimers = newTimers }
+      t  = mTick m5 + 1
+  in if t < ticksPerDrop (mLevel m5)
+       then m5 { mTick = t }
+       else case mCur m5 of
+              Nothing -> spawnNext m5 { mTick = 0 }
+              Just p  ->
+                let p' = p { pY = pY p + 1 }
+                in if isValid (mBoard m5) p'
+                     then m5 { mCur = Just p', mTick = 0 }
+                     else lockAndSpawn m5 p
+
+lockAndSpawn :: Model -> Piece -> Model
+lockAndSpawn m p =
+  let board1        = lockPiece (mBoard m) p
+      (board2, n)   = clearLines board1
+      score'        = mScore m + lineScore (mLevel m) n
+      lines'        = mLines m + n
+      level'        = 1 + lines' \`div\` 10
+      (next', rng') = randPType (mRng m)
+      newPiece      = spawnPiece (mNext m)
+  in if not (isValid board2 newPiece)
+       then m { mBoard = board2, mCur = Nothing, mPhase = GameOver
+              , mScore = score', mLines = lines', mLevel = level' }
+       else m { mBoard  = board2
+              , mCur    = Just newPiece
+              , mNext   = next'
+              , mScore  = score'
+              , mLines  = lines'
+              , mLevel  = level'
+              , mTick   = 0
+              , mRng    = rng'
+              }
+
+spawnNext :: Model -> Model
+spawnNext m =
+  let (next', rng') = randPType (mRng m)
+      newPiece      = spawnPiece (mNext m)
+  in if not (isValid (mBoard m) newPiece)
+       then m { mPhase = GameOver }
+       else m { mCur = Just newPiece, mNext = next', mRng = rng' }
+----------------------------------------------------------------------------
+-- View
+viewModel :: props -> Model -> View Model Action
+viewModel _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex"
+        , CSS.flexDirection "column"
+        , CSS.alignItems "center"
+        , CSS.justifyContent "center"
+        , CSS.position "absolute"
+        , CSS.top "0"
+        , CSS.left "0"
+        , CSS.width "100%"
+        , CSS.height "100%"
+        , CSS.overflow "hidden"
+        , CSS.backgroundColor (CSS.hex "141428")
+        , CSS.fontFamily "'Courier New', monospace"
+        ]
+    ]
+    [ H.h1_
+        [ CSS.style_
+            [ CSS.fontSize (CSS.rem 2)
+            , CSS.letterSpacing (CSS.em 0.3)
+            , CSS.margin "0 0 16px 0"
+            ]
+        ]
+        [ H.a_
+            [ HP.href_ "https://github.com/haskell-miso/miso-tetris"
+            , CSS.style_
+                [ CSS.color (CSS.hex "00f0f0")
+                , CSS.textShadow "0 0 20px #00f0f0"
+                , CSS.textDecoration "none"
+                ]
+            ]
+            [ text "miso tetris 🍜" ]
+        ]
+    , H.div_
+        [ CSS.style_
+            [ CSS.display "flex"
+            , CSS.gap "20px"
+            , CSS.alignItems "flex-start"
+            ]
+        ]
+        [ viewBoard m
+        , viewPanel m
+        ]
+    , H.div_
+        [ CSS.style_
+            [ CSS.marginTop (CSS.px 12)
+            , CSS.fontSize (CSS.rem 0.7)
+            , CSS.color (CSS.hex "9999cc")
+            , CSS.letterSpacing (CSS.em 0.1)
+            ]
+        ]
+        [ text "\\8592\\8594 move  \\8593 rotate  \\8595 soft drop  SPC hard drop  P pause  R restart" ]
+    ]
+----------------------------------------------------------------------------
+viewBoard :: Model -> View Model Action
+viewBoard m =
+  let w     = boardW * cellSz
+      h     = boardH * cellSz
+      ghost = case (mPhase m, mCur m) of
+                (Playing, Just p) -> Just (hardDrop (mBoard m) p)
+                _                 -> Nothing
+  in SV.svg_
+       [ HP.width_  (ms w)
+       , HP.height_ (ms h)
+       , SP.viewBox_ ("0 0 " <> ms w <> " " <> ms h)
+       , CSS.style_
+           [ CSS.display "block"
+           , CSS.border "2px solid #5555bb"
+           , CSS.boxShadow "0 0 40px rgba(0,240,240,0.35)"
+           ]
+       ]
+       ( bgCells
+      ++ boardCells (mBoard m)
+      ++ maybe [] ghostCells ghost
+      ++ maybe [] activeCells (mCur m)
+      ++ overlayViews m
+       )
+----------------------------------------------------------------------------
+bgCells :: [View Model Action]
+bgCells =
+  [ SV.rect_
+      [ SP.x_ (ms (c * cellSz))
+      , SP.y_ (ms (r * cellSz))
+      , HP.width_  (ms cellSz)
+      , HP.height_ (ms cellSz)
+      , SP.fill_ (if even (r + c) then "#1c1c3c" else "#232350")
+      , SP.stroke_ "#2e2e60"
+      , SP.strokeWidth_ "1"
+      ]
+  | r <- [0..boardH-1], c <- [0..boardW-1]
+  ]
+----------------------------------------------------------------------------
+boardCells :: Board -> [View Model Action]
+boardCells board =
+  [ SV.rect_
+      [ SP.x_ (ms (c * cellSz + 1))
+      , SP.y_ (ms (r * cellSz + 1))
+      , HP.width_  (ms (cellSz - 2))
+      , HP.height_ (ms (cellSz - 2))
+      , SP.fill_        (colorHex col)
+      , SP.stroke_      (colorHex col <> "cc")
+      , SP.strokeWidth_ "1"
+      , SP.rx_          "3"
+      ]
+  | (r, row) <- zip [0..] board
+  , (c, Just col) <- zip [0..] row
+  ]
+----------------------------------------------------------------------------
+ghostCells :: Piece -> [View Model Action]
+ghostCells p =
+  [ SV.rect_
+      [ SP.x_ (ms (c * cellSz + 3))
+      , SP.y_ (ms (r * cellSz + 3))
+      , HP.width_  (ms (cellSz - 6))
+      , HP.height_ (ms (cellSz - 6))
+      , SP.fill_        "none"
+      , SP.stroke_      (pieceColorHex (pType p))
+      , SP.strokeWidth_ "2"
+      , SP.opacity_     "0.55"
+      , SP.rx_          "2"
+      ]
+  | (r, c) <- pieceCells p, r >= 0
+  ]
+----------------------------------------------------------------------------
+activeCells :: Piece -> [View Model Action]
+activeCells p =
+  [ SV.rect_
+      [ SP.x_ (ms (c * cellSz + 1))
+      , SP.y_ (ms (r * cellSz + 1))
+      , HP.width_  (ms (cellSz - 2))
+      , HP.height_ (ms (cellSz - 2))
+      , SP.fill_        (pieceColorHex (pType p))
+      , SP.stroke_      "#ffffff88"
+      , SP.strokeWidth_ "1"
+      , SP.rx_          "3"
+      ]
+  | (r, c) <- pieceCells p, r >= 0
+  ]
+----------------------------------------------------------------------------
+overlayViews :: Model -> [View Model Action]
+overlayViews m =
+  let w = boardW * cellSz
+      h = boardH * cellSz
+  in case mPhase m of
+       GameOver ->
+         [ SV.rect_
+             [ SP.x_ "0", SP.y_ "0"
+             , HP.width_ (ms w), HP.height_ (ms h)
+             , SP.fill_ "rgba(0,0,0,0.72)"
+             ]
+         , svgLabel (ms (w \`div\` 2)) (ms (h \`div\` 2 - 22)) "28" "#ff4444" "GAME OVER"
+         , svgLabel (ms (w \`div\` 2)) (ms (h \`div\` 2 + 14)) "15" "#8888aa" "Press R to restart"
+         ]
+       Paused ->
+         [ SV.rect_
+             [ SP.x_ "0", SP.y_ "0"
+             , HP.width_ (ms w), HP.height_ (ms h)
+             , SP.fill_ "rgba(0,0,0,0.62)"
+             ]
+         , svgLabel (ms (w \`div\` 2)) (ms (h \`div\` 2)) "28" "#00f0f0" "PAUSED"
+         ]
+       Playing -> []
+----------------------------------------------------------------------------
+svgLabel :: MisoString -> MisoString -> MisoString -> MisoString -> MisoString -> View Model Action
+svgLabel x y sz col txt =
+  SV.text_
+    [ SP.x_ x, SP.y_ y
+    , SP.textAnchor_ "middle"
+    , SP.fill_       col
+    , SP.fontSize_   sz
+    , SP.fontWeight_ "bold"
+    , SP.fontFamily_ "'Courier New', monospace"
+    ]
+    [ text txt ]
+----------------------------------------------------------------------------
+viewPanel :: Model -> View Model Action
+viewPanel m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex"
+        , CSS.flexDirection "column"
+        , CSS.gap "14px"
+        , CSS.width "150px"
+        ]
+    ]
+    [ infoCard "NEXT"  (nextPieceView (mNext m))
+    , infoCard "SCORE" (statLabel (ms (mScore m)))
+    , infoCard "LEVEL" (statLabel (ms (mLevel m)))
+    , infoCard "LINES" (statLabel (ms (mLines m)))
+    , restartBtn
+    ]
+----------------------------------------------------------------------------
+infoCard :: MisoString -> View Model Action -> View Model Action
+infoCard label inner =
+  H.div_
+    [ CSS.style_
+        [ CSS.background "#1c1c3a"
+        , CSS.border "1px solid #3a3a70"
+        , CSS.borderRadius "6px"
+        , CSS.padding "10px 14px"
+        , CSS.boxShadow "0 2px 12px rgba(0,0,0,0.5)"
+        ]
+    ]
+    [ H.p_
+        [ CSS.style_
+            [ CSS.fontSize "0.65rem"
+            , CSS.letterSpacing "0.2em"
+            , CSS.color (CSS.hex "9999cc")
+            , CSS.margin "0 0 6px 0"
+            ]
+        ]
+        [ text label ]
+    , inner
+    ]
+----------------------------------------------------------------------------
+statLabel :: MisoString -> View Model Action
+statLabel val =
+  H.p_
+    [ CSS.style_
+        [ CSS.fontSize (CSS.rem 1.5)
+        , CSS.fontWeight "bold"
+        , CSS.color (CSS.hex "00f0f0")
+        , CSS.margin "0"
+        , CSS.textShadow "0 0 12px rgba(0,240,240,0.7)"
+        ]
+    ]
+    [ text val ]
+----------------------------------------------------------------------------
+nextPieceView :: PType -> View Model Action
+nextPieceView pt =
+  let preview   = Piece { pType = pt, pX = 0, pY = 0, pRot = 0 }
+      cells     = pieceCells preview
+      maxR      = maximum (fmap fst cells) + 1
+      maxC      = maximum (fmap snd cells) + 1
+      svgW      = maxC * previewSz
+      svgH      = maxR * previewSz
+  in SV.svg_
+       [ HP.width_  (ms svgW)
+       , HP.height_ (ms svgH)
+       , SP.viewBox_ ("0 0 " <> ms svgW <> " " <> ms svgH)
+       ]
+       [ SV.rect_
+           [ SP.x_ (ms (c * previewSz + 1))
+           , SP.y_ (ms (r * previewSz + 1))
+           , HP.width_  (ms (previewSz - 2))
+           , HP.height_ (ms (previewSz - 2))
+           , SP.fill_        (pieceColorHex pt)
+           , SP.stroke_      "#ffffff33"
+           , SP.strokeWidth_ "1"
+           , SP.rx_          "2"
+           ]
+       | (r, c) <- cells
+       ]
+----------------------------------------------------------------------------
+restartBtn :: View Model Action
+restartBtn =
+  H.button_
+    [ SV.onClick Restart
+    , CSS.style_
+        [ CSS.background "#1c1c3a"
+        , CSS.border "1px solid #3a3a70"
+        , CSS.borderRadius "6px"
+        , CSS.color (CSS.hex "bbbbdd")
+        , CSS.padding "10px"
+        , CSS.fontSize (CSS.rem 0.8)
+        , CSS.letterSpacing "0.1em"
+        , CSS.cursor "pointer"
+        , CSS.width "100%"
+        , CSS.fontFamily "'Courier New',monospace"
+        ]
+    ]
+    [ text "RESTART" ]
+----------------------------------------------------------------------------
+`;
+
+      const examples = { counter: defaultSource, hello: helloExample, input: inputExample, tetris: tetrisExample };
+
       const hash = window.location.hash.slice(1);
-      let initialSource = defaultSource;
+      let initialSource = helloExample;
       if (hash) {
         const decoded = await decompressFromHash(hash);
         if (decoded) {
           initialSource = decoded;
           history.replaceState(null, "", window.location.pathname + window.location.search);
         }
+      } else {
+        const saved = localStorage.getItem('miso-pg-src');
+        if (saved) initialSource = saved;
       }
+
+      const savedFontSize = parseInt(localStorage.getItem('miso-pg-fontSize') || '14', 10);
+      const savedFontFamily = localStorage.getItem('miso-pg-fontFamily') || "'Fira Code', monospace";
 
       window.editor = monaco.editor.create(document.getElementById("editor"), {
         value: initialSource,
@@ -835,13 +1588,73 @@ orbitDot dur color sz offset playState =
         automaticLayout: true,
         minimap: { enabled: false },
         theme: "vs-dark",
-        fontSize: 14,
+        fontSize: savedFontSize,
+        fontFamily: savedFontFamily,
+        fontLigatures: savedFontFamily !== 'ui-monospace, Menlo, Consolas, monospace',
       });
 
       window.editor.addCommand(
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
         () => document.getElementById("runBtn").click(),
       );
+
+      // localStorage autosave
+      window.editor.onDidChangeModelContent(() => {
+        localStorage.setItem('miso-pg-src', window.editor.getValue());
+      });
+
+      // Example picker — load selected example, keep selection visible
+      const examplePicker = document.getElementById('examplePicker');
+      examplePicker.addEventListener('change', () => {
+        const ex = examples[examplePicker.value];
+        if (ex) {
+          window.editor.setValue(ex);
+          document.getElementById('runBtn').click();
+        }
+      });
+
+      // Font size +/−
+      let currentFontSize = savedFontSize;
+      const fontSizeDisplay = document.getElementById('fontSizeDisplay');
+      fontSizeDisplay.textContent = String(currentFontSize);
+      document.getElementById('fontSizeDown').addEventListener('click', () => {
+        currentFontSize = Math.max(8, currentFontSize - 1);
+        window.editor.updateOptions({ fontSize: currentFontSize });
+        localStorage.setItem('miso-pg-fontSize', String(currentFontSize));
+        fontSizeDisplay.textContent = String(currentFontSize);
+      });
+      document.getElementById('fontSizeUp').addEventListener('click', () => {
+        currentFontSize = Math.min(32, currentFontSize + 1);
+        window.editor.updateOptions({ fontSize: currentFontSize });
+        localStorage.setItem('miso-pg-fontSize', String(currentFontSize));
+        fontSizeDisplay.textContent = String(currentFontSize);
+      });
+
+      // Font family picker
+      const fontFamilyPicker = document.getElementById('fontFamilyPicker');
+      fontFamilyPicker.value = savedFontFamily;
+      fontFamilyPicker.addEventListener('change', () => {
+        const ff = fontFamilyPicker.value;
+        window.editor.updateOptions({ fontFamily: ff, fontLigatures: ff !== 'ui-monospace, Menlo, Consolas, monospace' });
+        localStorage.setItem('miso-pg-fontFamily', ff);
+      });
+
+      let wordWrap = false;
+      document.getElementById('wordWrapBtn').addEventListener('click', () => {
+        wordWrap = !wordWrap;
+        window.editor.updateOptions({ wordWrap: wordWrap ? 'on' : 'off' });
+        document.getElementById('wordWrapBtn').classList.toggle('active', wordWrap);
+      });
+
+      document.getElementById('downloadBtn').addEventListener('click', () => {
+        const blob = new Blob([window.editor.getValue()], { type: 'text/plain' });
+        const a = Object.assign(document.createElement('a'), {
+          href: URL.createObjectURL(blob),
+          download: 'Main.hs',
+        });
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
 
       let stderrLines = [];
 
@@ -1021,6 +1834,7 @@ orbitDot dur color sz offset playState =
         } else {
           document.exitFullscreen();
         }
+        document.getElementById("fullscreenBtn").blur();
       });
       document.addEventListener("fullscreenchange", () => {
         const inFs = !!document.fullscreenElement;
@@ -1051,11 +1865,42 @@ orbitDot dur color sz offset playState =
     </div>
     <div class="app">
       <section class="pane" id="leftPane">
-        <header>
-          Source
-          <div style="display:flex;gap:0.5rem;align-items:center;">
-            <button id="shareBtn" disabled>&#x1F517; Share</button>
-            <button id="runBtn" disabled="true">Loading…</button>
+        <header style="flex-direction:column;align-items:stretch;gap:0.35rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Source</span>
+            <div style="display:flex;gap:0.4rem;align-items:center;">
+              <button id="shareBtn" disabled>&#x1F517; Share</button>
+              <button id="runBtn" disabled="true">Loading…</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.35rem;">
+            <select id="examplePicker" class="editor-ctrl-select" aria-label="Load example">
+              <option value="" selected disabled>Load example…</option>
+              <option value="counter">Counter Demo</option>
+              <option value="hello">Hello World</option>
+              <option value="input">Live Input</option>
+              <option value="tetris">Tetris</option>
+            </select>
+            <div style="display:flex;align-items:center;gap:0.35rem;">
+              <div class="font-controls">
+                <button id="fontSizeDown" class="editor-ctrl-btn" title="Decrease font size" aria-label="Decrease font size">A−</button>
+                <span id="fontSizeDisplay" style="font-size:0.75rem;color:#9ca3af;min-width:1.5rem;text-align:center;"></span>
+                <button id="fontSizeUp" class="editor-ctrl-btn" title="Increase font size" aria-label="Increase font size">A+</button>
+                <select id="fontFamilyPicker" class="editor-ctrl-select" aria-label="Font family">
+                  <option value="ui-monospace, Menlo, Consolas, monospace">System mono</option>
+                  <option value="'Fira Code', monospace">Fira Code</option>
+                  <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                  <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                </select>
+              </div>
+              <div class="editor-ctrl-divider"></div>
+              <button id="wordWrapBtn" class="editor-ctrl-btn" title="Toggle word wrap" aria-label="Toggle word wrap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="3" y1="6" x2="21" y2="6"/><path d="M3 12h15a3 3 0 0 1 0 6h-4"/><polyline points="10 15 7 18 10 21"/>
+                </svg>
+              </button>
+              <button id="downloadBtn" class="editor-ctrl-btn" title="Download source as .hs file">⬇ .hs</button>
+            </div>
           </div>
         </header>
         <div id="editor"><div class="loading">Loading rootfs…</div></div>
