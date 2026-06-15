@@ -121,6 +121,90 @@
         font-size: 0.85rem;
         touch-action: manipulation;
       }
+      #shareBtn {
+        background: #3b82f6;
+        border: none;
+        border-radius: 8px;
+        padding: 0.3rem 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #fff;
+        touch-action: manipulation;
+      }
+      #shareBtn:hover { background: #2563eb; }
+      #shareBtn:disabled { opacity: 0.5; cursor: default; }
+      .share-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.65);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .share-modal-overlay.open { display: flex; }
+      .share-modal {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 1.5rem;
+        max-width: 480px;
+        width: 90%;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .share-modal h2 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #e5e7eb;
+      }
+      .share-modal p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #6b7280;
+      }
+      .share-modal .share-url-row {
+        display: flex;
+        gap: 0.5rem;
+      }
+      .share-modal input {
+        flex: 1;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 0.45rem 0.65rem;
+        color: #e5e7eb;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 0.8rem;
+        outline: none;
+      }
+      .share-modal .copy-btn {
+        background: #3b82f6;
+        border: none;
+        border-radius: 8px;
+        padding: 0.45rem 0.85rem;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.82rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .share-modal .copy-btn:hover { background: #2563eb; }
+      .share-modal .close-btn {
+        align-self: flex-end;
+        background: #374151;
+        border: none;
+        border-radius: 8px;
+        padding: 0.35rem 1rem;
+        color: #e5e7eb;
+        font-weight: 600;
+        font-size: 0.82rem;
+        cursor: pointer;
+      }
+      .share-modal .close-btn:hover { background: #4b5563; }
       #leftPane  { flex: 55; }
       #rightPane { flex: 45; }
       #editor {
@@ -511,8 +595,7 @@
         },
       });
 
-      window.editor = monaco.editor.create(document.getElementById("editor"), {
-        value: `----------------------------------------------------------------------------
+      const defaultSource = `----------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase        #-}
 ----------------------------------------------------------------------------
@@ -676,7 +759,19 @@ orbitDot dur color sz offset playState =
         ] []
     ]
 ----------------------------------------------------------------------------
-`,
+`;
+
+      const pasteId = new URLSearchParams(window.location.search).get('paste');
+      let initialSource = defaultSource;
+      if (pasteId) {
+        try {
+          const resp = await fetch(`https://paste.rs/${encodeURIComponent(pasteId)}`);
+          if (resp.ok) initialSource = await resp.text();
+        } catch {}
+      }
+
+      window.editor = monaco.editor.create(document.getElementById("editor"), {
+        value: initialSource,
         language: "haskell",
         automaticLayout: true,
         minimap: { enabled: false },
@@ -780,6 +875,44 @@ orbitDot dur color sz offset playState =
       document.getElementById("app").innerHTML = "";
       runBtn.click();
 
+      const shareBtn = document.getElementById("shareBtn");
+      const shareModal = document.getElementById("shareModal");
+      const shareUrlInput = document.getElementById("shareUrl");
+
+      shareBtn.disabled = false;
+      shareBtn.addEventListener("click", async () => {
+        shareBtn.disabled = true;
+        try {
+          const resp = await fetch("https://paste.rs/", {
+            method: "POST",
+            body: editor.getValue(),
+          });
+          if (!resp.ok) throw new Error(`paste.rs returned ${resp.status}`);
+          const pasteUrl = (await resp.text()).trim();
+          const id = pasteUrl.split("/").pop();
+          const shareUrl = `${window.location.origin}${window.location.pathname}?paste=${id}`;
+          shareUrlInput.value = shareUrl;
+          await navigator.clipboard.writeText(shareUrl).catch(() => {});
+          shareModal.classList.add("open");
+        } catch (err) {
+          alert("Failed to create share link: " + err.message);
+        } finally {
+          shareBtn.disabled = false;
+        }
+      });
+
+      document.getElementById("closeShareModal").addEventListener("click", () => {
+        shareModal.classList.remove("open");
+      });
+      document.getElementById("copyShareUrl").addEventListener("click", () => {
+        navigator.clipboard.writeText(shareUrlInput.value).catch(() => {});
+        document.getElementById("copyShareUrl").textContent = "Copied!";
+        setTimeout(() => { document.getElementById("copyShareUrl").textContent = "Copy"; }, 1500);
+      });
+      shareModal.addEventListener("click", e => {
+        if (e.target === shareModal) shareModal.classList.remove("open");
+      });
+
       // Draggable splitter between left and right panes
       const splitter = document.getElementById("splitter");
       const leftPane  = document.getElementById("leftPane");
@@ -847,7 +980,10 @@ orbitDot dur color sz offset playState =
       <section class="pane" id="leftPane">
         <header>
           Source
-          <button id="runBtn" disabled="true">Loading…</button>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button id="shareBtn" disabled>Share</button>
+            <button id="runBtn" disabled="true">Loading…</button>
+          </div>
         </header>
         <div id="editor"><div class="loading">Loading rootfs…</div></div>
       </section>
@@ -869,6 +1005,17 @@ orbitDot dur color sz offset playState =
           </div>
         </div>
       </section>
+    </div>
+    <div class="share-modal-overlay" id="shareModal">
+      <div class="share-modal">
+        <h2>Share</h2>
+        <p>Link copied to clipboard!</p>
+        <div class="share-url-row">
+          <input id="shareUrl" type="text" readonly />
+          <button class="copy-btn" id="copyShareUrl">Copy</button>
+        </div>
+        <button class="close-btn" id="closeShareModal">Close</button>
+      </div>
     </div>
   </body>
 </html>
