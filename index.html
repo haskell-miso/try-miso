@@ -647,6 +647,8 @@ import qualified Miso.CSS  as CSS
 import qualified Miso.Html as H
 import           Miso.Lens
 ----------------------------------------------------------------------------
+import           System.IO (hFlush, stdout)
+----------------------------------------------------------------------------
 -- | Component model state
 data Model = Model { _count :: Int, _animating :: Bool }
   deriving (Eq)
@@ -681,7 +683,7 @@ updateModel = \\case
   AddOne        -> count += 1
   SubtractOne   -> count -= 1
   ToggleAnim    -> animating %= not
-  SayHelloWorld -> io_ (putStrLn "Hello World")
+  SayHelloWorld -> io_ (putStrLn "Hello World" >> hFlush stdout)
 ----------------------------------------------------------------------------
 -- | Helper for rendering a styled icon button
 iconBtn :: Action -> MisoString -> View Model Action
