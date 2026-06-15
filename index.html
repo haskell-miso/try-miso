@@ -74,55 +74,6 @@
         display: flex;
         padding: 0.5rem;
       }
-      @media (max-width: 799.98px) {
-        html, body {
-          height: auto;
-          min-height: 100%;
-          overflow-y: auto;
-        }
-        .app {
-          flex: none;
-          flex-direction: column;
-          gap: 0.5rem;
-          min-height: 0;
-        }
-        .splitter { display: none; }
-        .row-splitter { display: none; }
-        #leftPane {
-          flex: none;
-          height: 55vmax;
-          min-height: 280px;
-        }
-        #rightPane {
-          flex: none;
-          height: auto;
-        }
-        .outputs {
-          flex: none;
-          overflow: visible;
-          height: auto;
-          min-height: 0;
-        }
-        #app {
-          flex: none;
-          height: auto;
-          min-height: 200px;
-          overflow: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        .stdout-wrap {
-          flex: none;
-          min-height: 0;
-        }
-        .outputs textarea {
-          flex: none;
-          min-height: 120px;
-          resize: vertical;
-        }
-        .topbar p {
-          display: none;
-        }
-      }
       .splitter {
         flex: 0 0 5px;
         cursor: col-resize;
@@ -232,6 +183,55 @@
         padding: 0.6rem;
         box-sizing: border-box;
         overflow: auto;
+      }
+      @media (max-width: 799.98px) {
+        html, body {
+          height: auto;
+          min-height: 100%;
+          overflow-y: auto;
+        }
+        .app {
+          flex: none;
+          flex-direction: column;
+          gap: 0.5rem;
+          min-height: 0;
+        }
+        .splitter { display: none; }
+        .row-splitter { display: none; }
+        #leftPane {
+          flex: none;
+          height: 55vmax;
+          min-height: 280px;
+        }
+        #rightPane {
+          flex: none;
+          height: auto;
+        }
+        .outputs {
+          flex: none;
+          overflow: visible;
+          height: auto;
+          min-height: 0;
+        }
+        #app {
+          flex: none;
+          height: auto;
+          min-height: 200px;
+          overflow: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .stdout-wrap {
+          flex: none;
+          min-height: 0;
+        }
+        .outputs textarea {
+          flex: none;
+          min-height: clamp(120px, calc(100svh - 55vmax - 360px), 70vh);
+          resize: vertical;
+        }
+        .topbar p {
+          display: none;
+        }
       }
     </style>
 
