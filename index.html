@@ -209,18 +209,24 @@
         white-space: nowrap;
       }
       .share-modal .copy-btn:hover { background: #2563eb; }
-      .share-modal .close-btn {
-        align-self: flex-end;
-        background: #374151;
-        border: none;
-        border-radius: 8px;
-        padding: 0.35rem 1rem;
-        color: #e5e7eb;
-        font-weight: 600;
-        font-size: 0.82rem;
-        cursor: pointer;
+      .share-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
       }
-      .share-modal .close-btn:hover { background: #4b5563; }
+      .share-modal .close-btn {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .share-modal .close-btn:hover { color: #e5e7eb; }
       #leftPane  { flex: 55; }
       #rightPane { flex: 45; }
       #editor {
@@ -1765,8 +1771,7 @@ restartBtn =
       });
       document.getElementById("copyShareUrl").addEventListener("click", () => {
         navigator.clipboard.writeText(shareUrlInput.value).catch(() => {});
-        document.getElementById("copyShareUrl").textContent = "Copied!";
-        setTimeout(() => { document.getElementById("copyShareUrl").textContent = "Copy"; }, 1500);
+        shareModal.classList.remove("open");
       });
       shareModal.addEventListener("click", e => {
         if (e.target === shareModal) shareModal.classList.remove("open");
@@ -1933,13 +1938,15 @@ restartBtn =
     </div>
     <div class="share-modal-overlay" id="shareModal">
       <div class="share-modal">
-        <h2>Share</h2>
+        <div class="share-modal-header">
+          <h2>Share</h2>
+          <button class="close-btn" id="closeShareModal">&times;</button>
+        </div>
         <p>Link copied to clipboard!</p>
         <div class="share-url-row">
           <input id="shareUrl" type="text" readonly />
           <button class="copy-btn" id="copyShareUrl">Copy</button>
         </div>
-        <button class="close-btn" id="closeShareModal">Close</button>
       </div>
     </div>
   </body>
