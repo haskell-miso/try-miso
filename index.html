@@ -2672,92 +2672,183 @@ btnStyle col =
       const lesson15 = `----------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE QuasiQuotes       #-}
 ----------------------------------------------------------------------------
--- Lesson 15: Lifecycle Hooks — onCreated / onDestroyed
--- VNode lifecycle hooks fire when a DOM node is created or destroyed.
--- onCreated        — fires after the node is inserted into the DOM
--- onCreatedWith    — same but passes the DOM reference (DOMRef)
--- onDestroyed      — fires after the node is removed from the DOM
--- These are useful for integrating third-party JS libraries.
+-- Lesson 20: Lifecycle Hooks
+--
+-- ── VNode lifecycle hooks (Attribute) ────────────────────────────────────
+--
+--   onBeforeCreated       :: action             -> Attribute action
+--   onCreated             :: action             -> Attribute action
+--   onCreatedWith         :: (DOMRef -> action) -> Attribute action
+--   onBeforeDestroyed     :: action             -> Attribute action
+--   onBeforeDestroyedWith :: (DOMRef -> action) -> Attribute action
+--   onDestroyed           :: action             -> Attribute action
+--
+--   DOMRef = JSVal  — a reference to the actual HTMLElement in the browser.
+--
+--   onCreatedWith is the key hook for 3rd-party JS library integration.
+--   The callback receives the DOM node as soon as it is inserted, letting
+--   you call any imperative JS API on it directly.
+--
+-- ── Component lifecycle (fields on App / Component) ───────────────────────
+--
+--   mount   :: Maybe action  — dispatched once when the Component mounts
+--   unmount :: Maybe action  — dispatched when the Component unmounts
+--
+-- ── Loading external resources (scripts / styles) ─────────────────────────
+--
+--   scripts :: [JS]   — appended to <head> before the first draw
+--   styles  :: [CSS]  — appended to <head> before the first draw
+--
+--   data JS  = Src  MisoString CacheBust  -- <script src="...">
+--            | Script MisoString           -- inline <script>
+--            | Module MisoString           -- <script type="module">
+--
+--   data CSS = Href MisoString CacheBust  -- <link rel="stylesheet" href="...">
+--            | Style MisoString           -- inline <style>
+--            | Sheet StyleSheet           -- Miso.CSS stylesheet
+--
+-- ── highlight.js integration ──────────────────────────────────────────────
+--
+--   The canonical onCreatedWith pattern.  highlight.js needs the real DOM
+--   node to apply syntax colouring — exactly what onCreatedWith provides:
+--
+--     [ onCreatedWith Highlight ]   on a <code class="language-haskell"> element
+--
+--   update (Highlight domRef) = io_ [js| hljs.highlightElement(${domRef}); |]
+--
+--   The library is loaded via the 'scripts' / 'styles' fields so it is
+--   present before the first render.  See haskell-miso/highlight.js on
+--   GitHub for the full production example.
 ----------------------------------------------------------------------------
 module Main where
 ----------------------------------------------------------------------------
-import           Miso
+import Miso
+import Miso.FFI.QQ (js)
 import qualified Miso.Html as H
+import qualified Miso.Html.Property as P
 import qualified Miso.CSS  as CSS
 ----------------------------------------------------------------------------
+-- highlight.js CDN URLs
+hljs :: MisoString
+hljs = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"
+
+hljsHaskell :: MisoString
+hljsHaskell = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/haskell.min.js"
+
+hljsTheme :: MisoString
+hljsTheme = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css"
+----------------------------------------------------------------------------
 data Action
-  = Toggle
-  | NodeCreated
-  | NodeDestroyed
-  | Log MisoString
-  deriving (Eq, Show)
+  = Highlight DOMRef   -- onCreatedWith: syntax-highlight the node
+  | Toggle             -- show/hide a node to demo onCreated/onDestroyed
+  | NodeCreated        -- onCreated
+  | NodeDestroyed      -- onDestroyed
+  | Mounted            -- Component mount hook
 
 data Model = Model
   { _visible :: Bool
-  , _events  :: [MisoString]
-  } deriving (Eq)
+  , _log     :: [MisoString]
+  } deriving Eq
 ----------------------------------------------------------------------------
 main :: IO ()
-main = startApp defaultEvents app { mountPoint = Just "app" }
-----------------------------------------------------------------------------
-app :: App Model Action
-app = vcomp (Model True []) update view
+main = startApp defaultEvents myApp { mountPoint = Just "app" }
+
+myApp :: App Model Action
+myApp = (vcomp (Model True []) update view)
+  { -- scripts / styles: injected into <head> before the first draw
+    scripts = [ Src hljs False, Src hljsHaskell False ]
+  , styles  = [ Href hljsTheme False ]
+    -- mount: fires once when this Component is first mounted
+  , mount   = Just Mounted
+  }
 ----------------------------------------------------------------------------
 update :: Action -> Effect parent props Model Action
 update = \\case
-  Toggle       -> modify (\\m -> m { _visible = not (_visible m) })
-  NodeCreated  -> modify (\\m -> m { _events = "📦 node created"   : _events m })
-  NodeDestroyed-> modify (\\m -> m { _events = "🗑 node destroyed"  : _events m })
-  Log msg      -> modify (\\m -> m { _events = msg : _events m })
+  -- onCreatedWith passes the real HTMLElement; call hljs on it directly
+  Highlight domRef ->
+    io_ [js| hljs.highlightElement(${domRef}); |]
+
+  Toggle ->
+    modify (\\m -> m { _visible = not (_visible m) })
+
+  NodeCreated ->
+    modify (\\m -> m { _log = "onCreated fired"   : take 5 (_log m) })
+
+  NodeDestroyed ->
+    modify (\\m -> m { _log = "onDestroyed fired" : take 5 (_log m) })
+
+  Mounted ->
+    modify (\\m -> m { _log = "Component mounted (mount field)" : _log m })
 ----------------------------------------------------------------------------
 view :: props -> Model -> View Model Action
 view _ m =
   H.div_
-    [ CSS.style_
-        [ CSS.display "flex", CSS.flexDirection "column", CSS.alignItems "center"
-        , CSS.gap "1.5rem", CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
-        ]
-    ]
-    [ H.button_
-        [ H.onClick Toggle
-        , CSS.style_
-            [ CSS.padding "0.5rem 1.5rem", CSS.border "none", CSS.borderRadius "8px"
-            , CSS.backgroundColor (CSS.hex "6366f1"), CSS.color (CSS.hex "fff")
-            , CSS.cursor "pointer", CSS.fontWeight "600"
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "40rem", CSS.margin "auto" ] ]
+
+    [ -- ── highlight.js via onCreatedWith ──────────────────────────────
+      H.h3_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontWeight "600"
+                          , CSS.fontSize "0.8rem", CSS.margin "0 0 0.5rem 0" ] ]
+             [ text "onCreatedWith — highlight.js" ]
+
+    , H.pre_ [ CSS.style_ [ CSS.margin "0 0 1.5rem 0", CSS.borderRadius "8px"
+                           , CSS.overflow "auto" ] ]
+        [ H.code_
+            [ P.class_ "language-haskell"
+            , onCreatedWith Highlight   -- fires with the DOM node once inserted
             ]
+            -- The text content is what hljs highlights
+            [ text "module Main where\\n\\nmain :: IO ()\\nmain = startApp defaultEvents app\\n\\nupdate Increment = this += 1\\nupdate Decrement = this -= 1" ]
         ]
-        [ text (if _visible m then "Hide widget" else "Show widget") ]
+
+    , H.pre_ [ CSS.style_ [ CSS.margin "0 0 1.5rem 0", CSS.borderRadius "8px"
+                           , CSS.overflow "auto" ] ]
+        [ H.code_
+            [ P.class_ "language-javascript"
+            , onCreatedWith Highlight
+            ]
+            [ text "const app = document.getElementById('app');\\nconst root = ReactDOM.createRoot(app);\\nroot.render(<h1>Hello, world!</h1>);" ]
+        ]
+
+    -- ── onCreated / onDestroyed ─────────────────────────────────────
+    , H.h3_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontWeight "600"
+                          , CSS.fontSize "0.8rem", CSS.margin "0 0 0.5rem 0" ] ]
+             [ text "onCreated / onDestroyed" ]
+
+    , H.button_
+        [ H.onClick Toggle
+        , CSS.style_ [ CSS.padding "0.45rem 1.25rem", CSS.border "none"
+                     , CSS.borderRadius "8px", CSS.cursor "pointer"
+                     , CSS.backgroundColor (CSS.hex "6366f1")
+                     , CSS.color (CSS.hex "fff"), CSS.fontWeight "700"
+                     , CSS.marginBottom "0.75rem" ] ]
+        [ text (if _visible m then "Unmount node" else "Mount node") ]
+
     , if _visible m
         then H.div_
-               [ onCreated NodeCreated, onDestroyed NodeDestroyed
-               , CSS.style_
-                   [ CSS.padding "1.5rem 2.5rem", CSS.borderRadius "12px"
-                   , CSS.backgroundColor (CSS.hex "1e293b")
-                   , CSS.border "1px solid #334155"
-                   , CSS.color (CSS.hex "22c55e"), CSS.fontSize "1.5rem"
-                   , CSS.fontWeight "700"
-                   ]
-               ]
-               [ text "I have lifecycle hooks!" ]
+               [ onCreated NodeCreated
+               , onDestroyed NodeDestroyed
+               , CSS.style_ [ CSS.padding "1rem", CSS.borderRadius "8px"
+                             , CSS.backgroundColor (CSS.hex "1e293b")
+                             , CSS.color (CSS.hex "22c55e"), CSS.fontWeight "700"
+                             , CSS.marginBottom "0.75rem" ] ]
+               [ text "I am in the DOM (onCreated fired)" ]
         else fragment []
-    , H.div_
-        [ CSS.style_
-            [ CSS.width "22rem", CSS.display "flex", CSS.flexDirection "column", CSS.gap "0.35rem" ]
-        ]
-        (map eventLine (take 8 (_events m)))
-    ]
 
-eventLine :: MisoString -> View Model Action
-eventLine msg =
-  H.div_
-    [ CSS.style_
-        [ CSS.padding "0.3rem 0.75rem", CSS.borderRadius "6px"
-        , CSS.backgroundColor (CSS.hex "0f172a"), CSS.color (CSS.hex "94a3b8")
-        , CSS.fontSize "0.85rem", CSS.fontFamily "ui-monospace, monospace"
-        ]
+    -- ── event log ───────────────────────────────────────────────────
+    , H.div_
+        [ CSS.style_ [ CSS.display "flex", CSS.flexDirection "column", CSS.gap "0.3rem" ] ]
+        (map (\\e -> H.div_
+                [ CSS.style_ [ CSS.padding "0.3rem 0.75rem", CSS.borderRadius "6px"
+                             , CSS.backgroundColor (CSS.hex "0f172a")
+                             , CSS.color (CSS.hex "94a3b8")
+                             , CSS.fontFamily "ui-monospace,monospace"
+                             , CSS.fontSize "0.8rem" ] ]
+                [ text e ])
+             (_log m))
     ]
-    [ text msg ]
 ----------------------------------------------------------------------------
 `;
 
