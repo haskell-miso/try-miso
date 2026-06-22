@@ -106,6 +106,7 @@
         border-radius: 3px;
         margin: 3px 0;
         transition: background 0.15s;
+        touch-action: none;
       }
       .row-splitter:hover, .row-splitter.active { background: #374151; }
       .pane {
@@ -1959,8 +1960,9 @@ restartBtn =
       const rowSplitter  = document.getElementById("rowSplitter");
       const appDiv       = document.getElementById("app");
       const stdoutSection = document.getElementById("stdoutSection");
-      rowSplitter.addEventListener("mousedown", e => {
+      rowSplitter.addEventListener("pointerdown", e => {
         e.preventDefault();
+        rowSplitter.setPointerCapture(e.pointerId);
         rowSplitter.classList.add("active");
         const startY  = e.clientY;
         const appH0   = appDiv.getBoundingClientRect().height;
@@ -1973,11 +1975,11 @@ restartBtn =
         };
         const onUp = () => {
           rowSplitter.classList.remove("active");
-          document.removeEventListener("mousemove", onMove);
-          document.removeEventListener("mouseup", onUp);
+          rowSplitter.removeEventListener("pointermove", onMove);
+          rowSplitter.removeEventListener("pointerup", onUp);
         };
-        document.addEventListener("mousemove", onMove);
-        document.addEventListener("mouseup", onUp);
+        rowSplitter.addEventListener("pointermove", onMove);
+        rowSplitter.addEventListener("pointerup", onUp);
       });
 
       document.getElementById("clearStdoutBtn").addEventListener("click", () => {
@@ -1996,6 +1998,7 @@ restartBtn =
         const inFs = !!document.fullscreenElement;
         document.getElementById("fsEnterIcon").style.display = inFs ? "none" : "";
         document.getElementById("fsExitIcon").style.display = inFs ? "" : "none";
+        window.editor?.layout();
       });
 
       // Theme picker
