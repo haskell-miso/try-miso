@@ -1679,6 +1679,3035 @@ restartBtn =
 
       const examples = { counter: defaultSource, hello: helloExample, input: inputExample, tetris: tetrisExample };
 
+      // ── Lessons ──────────────────────────────────────────────────────────
+
+      const lesson01 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+----------------------------------------------------------------------------
+-- Lesson 01: Hello World
+-- The simplest possible miso application.
+-- startApp draws to an empty <body> (or the mountPoint element).
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Miso
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App () ()
+app = vcomp () noop (\\_ _ -> "Hello, miso! 🍜")
+----------------------------------------------------------------------------
+`;
+
+      const lesson02 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 02: Counter — Model / View / Update
+-- The MVU (Elm architecture) loop:
+--   model  — application state
+--   view   — renders model to virtual DOM
+--   update — evolves model in response to actions
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Lens
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+newtype Model = Model { _count :: Int } deriving (Eq)
+
+count :: Lens Model Int
+count = lens _count (\\m c -> m { _count = c })
+----------------------------------------------------------------------------
+data Action = Inc | Dec deriving (Eq, Show)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model 0) update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Inc -> count += 1
+  Dec -> count -= 1
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.justifyContent "center", CSS.padding "2rem"
+        , CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ btn Dec "-"
+    , H.span_
+        [ CSS.style_ [ CSS.fontSize "3rem", CSS.fontWeight "700", CSS.color (CSS.hex "22c55e") ] ]
+        [ text (ms (_count m)) ]
+    , btn Inc "+"
+    ]
+
+btn :: Action -> MisoString -> View Model Action
+btn action label =
+  H.button_
+    [ H.onClick action
+    , CSS.style_
+        [ CSS.fontSize "2rem", CSS.width "3rem", CSS.height "3rem"
+        , CSS.border "none", CSS.borderRadius "8px"
+        , CSS.backgroundColor (CSS.hex "1e293b"), CSS.color (CSS.hex "e5e7eb")
+        , CSS.cursor "pointer"
+        ]
+    ]
+    [ text label ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson03 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 03: Events — onInput / onClick
+-- Common event handlers: onInput for text fields, onClick for buttons.
+-- Event handlers are attributes on virtual DOM nodes.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Lens
+import qualified Miso.Html          as H
+import qualified Miso.Html.Property as P
+import qualified Miso.CSS           as CSS
+----------------------------------------------------------------------------
+data Model = Model { _text :: MisoString, _upper :: Bool } deriving (Eq)
+
+txt   :: Lens Model MisoString
+txt   = lens _text  (\\m s -> m { _text  = s })
+upper :: Lens Model Bool
+upper = lens _upper (\\m b -> m { _upper = b })
+----------------------------------------------------------------------------
+data Action = SetText MisoString | ToggleUpper deriving (Eq, Show)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model "miso" False) update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  SetText s   -> txt .= s
+  ToggleUpper -> upper %= not
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.h1_ [ CSS.style_ [ CSS.fontSize "2.5rem", CSS.margin "0", CSS.color (CSS.hex "22c55e") ] ]
+        [ text (if _upper m then toUpper (_text m) else _text m) ]
+    , H.input_
+        [ H.onInput SetText
+        , P.value_ (_text m)
+        , CSS.style_
+            [ CSS.padding "0.5rem 1rem", CSS.borderRadius "8px"
+            , CSS.border "1px solid #334155", CSS.background "#1e293b"
+            , CSS.color (CSS.hex "e5e7eb"), CSS.fontSize "1.1rem", "outline" =: "none"
+            ]
+        ]
+    , H.button_
+        [ H.onClick ToggleUpper
+        , CSS.style_
+            [ CSS.padding "0.4rem 1rem", CSS.borderRadius "8px", CSS.border "none"
+            , CSS.backgroundColor (CSS.hex (if _upper m then "22c55e" else "334155"))
+            , CSS.color (CSS.hex "fff"), CSS.cursor "pointer", CSS.fontWeight "600"
+            ]
+        ]
+        [ text (if _upper m then "UPPERCASE ON" else "uppercase off") ]
+    ]
+
+toUpper :: MisoString -> MisoString
+toUpper = ms . map (\\c -> if c >= 'a' && c <= 'z' then toEnum (fromEnum c - 32) else c) . fromMisoString
+----------------------------------------------------------------------------
+`;
+
+      const lesson04 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 04: Lens State — Miso.Lens operators
+-- Miso.Lens is a lightweight lens library bundled with miso.
+-- Lenses can be written by hand using 'lens getter setter'.
+-- Inside Effect (which is MonadState), these operators are available:
+--   (+=), (-=), (*=)  — numeric mutation
+--   (.=)              — set a field
+--   (%=)              — modify a field with a function
+--   (^.)              — infix read (r ^. l)
+-- 'this' is the identity lens when the model IS the field.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Lens
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Model = Model
+  { _counter :: Int
+  , _active  :: Bool
+  } deriving (Eq)
+
+counter :: Lens Model Int
+counter = lens _counter (\\m c -> m { _counter = c })
+
+active :: Lens Model Bool
+active = lens _active (\\m b -> m { _active = b })
+----------------------------------------------------------------------------
+data Action = Inc | Dec | Double | Reset | Toggle
+  deriving (Eq, Show)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model 0 True) update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Inc    -> counter += 1      -- (+=) increments
+  Dec    -> counter -= 1      -- (-=) decrements
+  Double -> counter *= 2      -- (*=) multiplies
+  Reset  -> counter .= 0      -- (.=) sets to a value
+  Toggle -> active  %= not    -- (%=) applies a function
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.25rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.span_
+        [ CSS.style_
+            [ CSS.fontSize "5rem", CSS.fontWeight "700"
+            , CSS.color (CSS.hex (if m ^. active then "22c55e" else "6b7280"))
+            ]
+        ]
+        [ text (ms (m ^. counter)) ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.5rem", CSS.flexWrap "wrap", CSS.justifyContent "center" ] ]
+        (map (\\(a,l) -> H.button_ [ H.onClick a, CSS.style_ btnStyle ] [ text l ])
+          [ (Inc, "+1"), (Dec, "-1"), (Double, "×2"), (Reset, "reset") ])
+    , H.button_
+        [ H.onClick Toggle
+        , CSS.style_
+            [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+            , CSS.backgroundColor (CSS.hex (if m ^. active then "22c55e" else "374151"))
+            , CSS.color (CSS.hex "fff"), CSS.cursor "pointer"
+            ]
+        ]
+        [ text (if m ^. active then "active" else "inactive") ]
+    ]
+
+btnStyle :: [CSS.Style]
+btnStyle =
+  [ CSS.padding "0.4rem 0.9rem", CSS.border "none", CSS.borderRadius "8px"
+  , CSS.backgroundColor (CSS.hex "1e293b"), CSS.color (CSS.hex "e5e7eb")
+  , CSS.fontSize "1rem", CSS.cursor "pointer", CSS.fontWeight "600"
+  ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson05 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 05: Subscriptions — Timer
+-- A Sub is a long-running IO action that writes to the Component Sink.
+-- The 'subs' field lists subscriptions that live for the Component lifetime.
+-- Here we use threadDelay for a simple 1-second ticker.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Control.Concurrent (threadDelay)
+import Control.Monad      (forever)
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Lens
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Action = Tick | TogglePause deriving (Eq, Show)
+
+data Model = Model { _seconds :: Int, _paused :: Bool } deriving (Eq)
+
+seconds :: Lens Model Int
+seconds = lens _seconds (\\m s -> m { _seconds = s })
+paused  :: Lens Model Bool
+paused  = lens _paused  (\\m b -> m { _paused  = b })
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = (vcomp (Model 0 False) update view) { subs = [timerSub] }
+
+timerSub :: Sub Action
+timerSub sink = forever $ threadDelay 1000000 >> sink Tick
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Tick        -> do
+    m <- get
+    if _paused m then pure () else seconds += 1
+  TogglePause -> paused %= not
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.span_ [ CSS.style_ [ CSS.fontSize "5rem", CSS.fontWeight "700", CSS.color (CSS.hex "22c55e") ] ]
+        [ text (ms (_seconds m) <> "s") ]
+    , H.button_
+        [ H.onClick TogglePause
+        , CSS.style_
+            [ CSS.padding "0.5rem 1.5rem", CSS.border "none", CSS.borderRadius "8px"
+            , CSS.backgroundColor (CSS.hex (if _paused m then "22c55e" else "ef4444"))
+            , CSS.color (CSS.hex "fff"), CSS.fontSize "1rem", CSS.cursor "pointer"
+            , CSS.fontWeight "600"
+            ]
+        ]
+        [ text (if _paused m then "Resume" else "Pause") ]
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson06 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 06: Subscriptions — Keyboard
+-- keyboardSub delivers the full set of currently-held key codes as an IntSet.
+-- arrowsSub converts held keys to an Arrows record with x/y values in {-1,0,1}.
+-- Keyboard events require 'keyboardEvents' to be merged into your event set.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IS
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Subscription.Keyboard (arrowsSub, Arrows(..))
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Action = Move Arrows deriving (Eq, Show)
+
+data Model = Model { _x :: Int, _y :: Int } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = (vcomp (Model 5 5) update view) { subs = [arrowsSub Move] }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Move (Arrows dx dy) -> modify (\\m -> m
+    { _x = max 0 (min 9 (_x m + dx))
+    , _y = max 0 (min 9 (_y m - dy))
+    })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+        [ text "Use arrow keys to move the dot" ]
+    , H.div_
+        [ CSS.style_
+            [ CSS.display "grid"
+            , "grid-template-columns" =: "repeat(10, 2.5rem)"
+            , CSS.gap "4px"
+            ]
+        ]
+        [ cell r c m | r <- [0..9], c <- [0..9] ]
+    , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "22c55e"), CSS.margin "0" ] ]
+        [ text ("(" <> ms (_x m) <> ", " <> ms (_y m) <> ")") ]
+    ]
+
+cell :: Int -> Int -> Model -> View Model Action
+cell r c m =
+  H.div_
+    [ CSS.style_
+        [ CSS.width "2.5rem", CSS.height "2.5rem", CSS.borderRadius "50%"
+        , CSS.backgroundColor (CSS.hex (if _x m == c && _y m == r then "22c55e" else "1e293b"))
+        ]
+    ]
+    []
+----------------------------------------------------------------------------
+`;
+
+      const lesson07 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 07: Subscriptions — Mouse
+-- mouseSub delivers a PointerEvent on every pointermove event.
+-- PointerEvent carries clientX/Y, screenX/Y, offsetX/Y, and more.
+-- The 'client' field is a (Double, Double) pair.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Subscription.Mouse (mouseSub)
+import           Miso.Event (PointerEvent(..))
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+newtype Action = MouseMove PointerEvent deriving (Eq, Show)
+
+data Model = Model { _mx :: Double, _my :: Double } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = (vcomp (Model 0 0) update view) { subs = [mouseSub MouseMove] }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  MouseMove ev ->
+    let (x, y) = client ev
+    in modify (\\m -> m { _mx = x, _my = y })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.justifyContent "center"
+        , CSS.height "100%", CSS.gap "1rem"
+        , CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+        [ text "Move your mouse" ]
+    , H.div_
+        [ CSS.style_
+            [ CSS.fontSize "2.5rem", CSS.fontWeight "700", CSS.color (CSS.hex "22c55e")
+            , CSS.fontFamily "ui-monospace, monospace"
+            ]
+        ]
+        [ text (showF (_mx m) <> ", " <> showF (_my m)) ]
+    ]
+
+showF :: Double -> MisoString
+showF x = ms (show (round x :: Int))
+----------------------------------------------------------------------------
+`;
+
+      const lesson08 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 08: Subscriptions — startSub / stopSub
+-- Dynamic subscriptions can be started and stopped in response to actions.
+-- 'startSub' and 'stopSub' use a MisoString key to identify the sub.
+-- The 'subs' field is for subscriptions that live the whole Component lifetime.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Control.Concurrent (threadDelay)
+import Control.Monad      (forever)
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Lens
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Action = Tick | Start | Stop deriving (Eq, Show)
+
+newtype Model = Model { _ticks :: Int } deriving (Eq)
+
+ticks :: Lens Model Int
+ticks = lens _ticks (\\m n -> m { _ticks = n })
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model 0) update view
+----------------------------------------------------------------------------
+timerSub :: Sub Action
+timerSub sink = forever $ threadDelay 500000 >> sink Tick
+
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Tick  -> ticks += 1
+  Start -> startSub "timer" timerSub
+  Stop  -> stopSub  "timer"
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.span_ [ CSS.style_ [ CSS.fontSize "5rem", CSS.fontWeight "700", CSS.color (CSS.hex "22c55e") ] ]
+        [ text (ms (_ticks m)) ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
+        [ H.button_ [ H.onClick Start, CSS.style_ (btnStyle "22c55e") ] [ text "Start" ]
+        , H.button_ [ H.onClick Stop,  CSS.style_ (btnStyle "ef4444") ] [ text "Stop"  ]
+        ]
+    ]
+
+btnStyle :: MisoString -> [CSS.Style]
+btnStyle col =
+  [ CSS.padding "0.5rem 1.5rem", CSS.border "none", CSS.borderRadius "8px"
+  , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+  , CSS.fontSize "1rem", CSS.cursor "pointer", CSS.fontWeight "600"
+  ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson09 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 09: Local Storage
+-- Miso.Storage wraps the Web Storage API.
+-- getLocalStorage returns Maybe MisoString; setLocalStorage writes a value.
+-- Use the mount hook to restore state from storage on startup.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Storage (getLocalStorage, setLocalStorage)
+import           Miso.Lens
+import qualified Miso.Html          as H
+import qualified Miso.Html.Property as P
+import qualified Miso.CSS           as CSS
+----------------------------------------------------------------------------
+storageKey :: MisoString
+storageKey = "lesson09-note"
+
+data Model = Model { _note :: MisoString } deriving (Eq)
+
+note :: Lens Model MisoString
+note = lens _note (\\m s -> m { _note = s })
+----------------------------------------------------------------------------
+data Action = SetNote MisoString | LoadNote | Loaded (Maybe MisoString) deriving (Eq, Show)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = (vcomp (Model "") update view) { mount = Just LoadNote }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  SetNote s -> do
+    note .= s
+    io_ (setLocalStorage storageKey s)
+  LoadNote  ->
+    io (fmap Loaded (getLocalStorage storageKey))
+  Loaded ms -> case ms of
+    Nothing -> pure ()
+    Just s  -> note .= s
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+        [ text "Persistent note (localStorage)" ]
+    , H.textarea_
+        [ H.onInput SetNote
+        , P.value_ (_note m)
+        , CSS.style_
+            [ CSS.width "22rem", CSS.height "8rem"
+            , CSS.padding "0.75rem", CSS.borderRadius "8px"
+            , CSS.border "1px solid #334155", CSS.background "#1e293b"
+            , CSS.color (CSS.hex "e5e7eb"), CSS.fontSize "1rem"
+            , "outline" =: "none", CSS.resize "vertical"
+            , CSS.fontFamily "system-ui, sans-serif"
+            ]
+        ]
+    , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.85rem", CSS.margin "0" ] ]
+        [ text "Reload the page — your note is saved!" ]
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson10 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 10: CSS Styles DSL
+-- Miso.CSS provides a structured DSL for inline styles.
+-- style_   — takes [(MisoString,MisoString)] style pairs
+-- CSS.hex  — construct a color from a hex string
+-- CSS.rgb  — construct a color from RGB values
+-- CSS.rem, CSS.px, CSS.em — unit helpers
+-- "prop" =: "value" — raw style pair via the (=:) operator
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+import           Miso.CSS.Color (RGB(..))
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App () ()
+app = vcomp () noop view
+----------------------------------------------------------------------------
+view :: props -> () -> View () ()
+view _ _ =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ colorSwatch (CSS.hex "22c55e")       "hex #22c55e"
+    , colorSwatch (CSS.RGB 99 102 241)     "RGB 99 102 241"
+    , colorSwatch (CSS.hex "f59e0b")       "hex #f59e0b"
+    , boxExample
+    , unitExample
+    ]
+
+colorSwatch :: CSS.Color -> MisoString -> View () ()
+colorSwatch col label =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.alignItems "center", CSS.gap "1rem" ]
+    ]
+    [ H.div_
+        [ CSS.style_
+            [ CSS.width "3rem", CSS.height "3rem", CSS.borderRadius "8px"
+            , CSS.backgroundColor col
+            ]
+        ]
+        []
+    , H.span_ [ CSS.style_ [ CSS.color (CSS.hex "e5e7eb") ] ] [ text label ]
+    ]
+
+boxExample :: View () ()
+boxExample =
+  H.div_
+    [ CSS.style_
+        [ CSS.padding (CSS.rem 1), CSS.borderRadius "12px"
+        , CSS.border "2px solid #334155"
+        , CSS.boxShadow "0 4px 24px rgba(99,102,241,0.3)"
+        , "user-select" =: "none"
+        ]
+    ]
+    [ text "padding=1rem, boxShadow, border" ]
+
+unitExample :: View () ()
+unitExample =
+  H.div_
+    [ CSS.style_
+        [ CSS.fontSize (CSS.rem 1.4), CSS.letterSpacing (CSS.em 0.1)
+        , CSS.color (CSS.hex "f59e0b"), CSS.fontWeight "700"
+        ]
+    ]
+    [ text "rem / em units" ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson11 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 11: SVG
+-- Miso.Svg and Miso.Svg.Property expose SVG element smart constructors.
+-- SVG nodes use the SVG namespace, distinct from HTML nodes.
+-- node SVG "circle" is equivalent to using Miso.Svg.circle_.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import qualified Miso.Html          as H
+import qualified Miso.Svg           as SV
+import qualified Miso.Svg.Property  as SP
+import qualified Miso.Html.Property as HP
+import qualified Miso.CSS           as CSS
+----------------------------------------------------------------------------
+data Action = Hover Int | Unhover deriving (Eq, Show)
+
+newtype Model = Model { _hovered :: Maybe Int } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model Nothing) update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Hover i -> modify (\\m -> m { _hovered = Just i })
+  Unhover -> modify (\\m -> m { _hovered = Nothing })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_ [ CSS.display "flex", CSS.flexDirection "column", CSS.alignItems "center", CSS.padding "2rem" ] ]
+    [ SV.svg_
+        [ HP.width_ "300", HP.height_ "300"
+        , SP.viewBox_ "0 0 300 300"
+        , CSS.style_ [ CSS.border "1px solid #334155", CSS.borderRadius "12px" ]
+        ]
+        [ SV.rect_
+            [ SP.x_ "10", SP.y_ "10", HP.width_ "280", HP.height_ "280"
+            , SP.fill_ "#0b1120", SP.rx_ "10"
+            ]
+        , circle_ 0 m 80  80  40 "#22c55e"
+        , circle_ 1 m 220 80  30 "#6366f1"
+        , circle_ 2 m 150 200 50 "#f59e0b"
+        , SV.line_
+            [ SP.x1_ "80", SP.y1_ "80", SP.x2_ "220", SP.y2_ "80"
+            , SP.stroke_ "#334155", SP.strokeWidth_ "2"
+            ]
+        , SV.text_
+            [ SP.x_ "150", SP.y_ "270", SP.textAnchor_ "middle"
+            , SP.fill_ "#6b7280", SP.fontSize_ "13"
+            ]
+            [ text (case _hovered m of Nothing -> "hover a shape"; Just i -> "shape " <> ms i) ]
+        ]
+    ]
+
+circle_ :: Int -> Model -> Int -> Int -> Int -> MisoString -> View Model Action
+circle_ i m cx cy r col =
+  let active = _hovered m == Just i
+  in SV.circle_
+       [ SP.cx_ (ms cx), SP.cy_ (ms cy), SP.r_ (ms (if active then r + 6 else r))
+       , SP.fill_ col, SP.opacity_ (if active then "1" else "0.7")
+       , H.onMouseOver (Hover i), H.onMouseOut Unhover
+       , CSS.style_ [ CSS.cursor "pointer", "transition" =: "r 0.15s" ]
+       ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson12 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 12: Canvas 2D + rAFSub
+-- Miso.Canvas wraps the HTML5 2D Canvas API.
+-- Miso.Subscription.RAF.rAFSub hooks into requestAnimationFrame for 60 FPS.
+-- It delivers a DOMHighResTimeStamp (Double, milliseconds) on each frame.
+-- The 'canvas' smart constructor takes:
+--   init  :: DOMRef -> Canvas canvasState  (runs once on mount)
+--   draw  :: canvasState -> Canvas ()      (runs every diff)
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Canvas
+import           Miso.Subscription.RAF (rAFSub)
+import qualified Miso.Html          as H
+import qualified Miso.Html.Property as HP
+import qualified Miso.CSS           as CSS
+----------------------------------------------------------------------------
+-- rAFSub delivers a DOMHighResTimeStamp in milliseconds
+data Action = Tick Double deriving (Eq, Show)
+
+newtype Model = Model { _t :: Double } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = (vcomp (Model 0) update view) { subs = [rAFSub Tick] }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Tick ms -> modify (\\m -> m { _t = ms / 1000.0 })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_ [ CSS.display "flex", CSS.flexDirection "column", CSS.alignItems "center", CSS.padding "2rem", CSS.gap "0.5rem" ] ]
+    [ canvas
+        [ HP.width_ "400", HP.height_ "300" ]
+        (\\_ -> pure ())
+        (\\() -> draw (_t m))
+    , H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.8rem", CSS.fontFamily "ui-monospace, monospace" ] ]
+        [ text ("t = " <> ms (_t m)) ]
+    ]
+
+draw :: Double -> Canvas ()
+draw t = do
+  let w = 400; h = 300
+  clearRect (0, 0, w, h)
+  fillStyle (color (CSS.hex "0b1120"))
+  fillRect  (0, 0, w, h)
+  mapM_ (drawOrbit t w h)
+    [ (80,  0,    CSS.hex "22c55e", 12)
+    , (60,  2.09, CSS.hex "6366f1",  9)
+    , (100, 4.19, CSS.hex "f59e0b",  7)
+    ]
+  fillStyle (color (CSS.hex "e5e7eb"))
+  beginPath ()
+  arc (w/2, h/2, 5, 0, 2*pi)
+  fill ()
+
+drawOrbit :: Double -> Double -> Double -> (Double, Double, CSS.Color, Double) -> Canvas ()
+drawOrbit t w h (r, phase, col, sz) = do
+  let x = w/2 + r * cos (t + phase)
+      y = h/2 + r * sin (t + phase)
+  fillStyle (color col)
+  beginPath ()
+  arc (x, y, sz, 0, 2*pi)
+  fill ()
+----------------------------------------------------------------------------
+`;
+
+      const lesson13 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 13: Fragments — VFrag
+-- VFrag groups sibling nodes without a wrapper DOM element.
+-- Analogous to React Fragments (<>...</>).
+-- fragment  — unkeyed; fragment_ / vfrag_ — keyed (participate in diffing).
+-- Empty fragments are erased before they reach the differ.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Action = Add | Remove deriving (Eq, Show)
+
+newtype Model = Model { _items :: [MisoString] } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model fruits) update view
+  where
+    fruits = ["apple", "banana", "cherry", "date", "elderberry"]
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Add    -> modify (\\m -> m { _items = _items m ++ ["item " <> ms (length (_items m) + 1)] })
+  Remove -> modify (\\m -> m { _items = if null (_items m) then [] else init (_items m) })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280") ] ]
+        [ text "VFrag: items render as siblings with no wrapper element" ]
+    , H.ul_
+        [ CSS.style_ [ CSS.listStyle "none", CSS.padding "0", CSS.margin "0", CSS.display "flex", CSS.flexDirection "column", CSS.gap "0.5rem" ] ]
+        -- fragment groups two <li> per item without an extra DOM node
+        (zipWith itemFragment [0..] (_items m))
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
+        [ H.button_ [ H.onClick Remove, CSS.style_ (btnStyle "ef4444") ] [ text "Remove" ]
+        , H.button_ [ H.onClick Add,    CSS.style_ (btnStyle "22c55e") ] [ text "Add"    ]
+        ]
+    ]
+
+itemFragment :: Int -> MisoString -> View Model Action
+itemFragment i name =
+  -- vfrag_ key children — keyed fragment
+  vfrag_ (ms i)
+    [ H.li_
+        [ CSS.style_ [ CSS.padding "0.4rem 1rem", CSS.background "#1e293b", CSS.borderRadius "6px", CSS.color (CSS.hex "22c55e") ] ]
+        [ text (ms (i + 1) <> ". " <> name) ]
+    ]
+
+btnStyle :: MisoString -> [CSS.Style]
+btnStyle col =
+  [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+  , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+  , CSS.cursor "pointer", CSS.fontWeight "600"
+  ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson14 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 14: Keyed Lists
+-- Attaching a 'key_' to child nodes lets the differ reuse DOM nodes
+-- instead of recreating them when list order changes.
+-- All children in a list must be keyed for the optimisation to fire.
+-- key_  — attaches a key to a VNode
+-- (+>)  — keys and mounts a child Component
+-- textKey — keyed VText node
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Data.List (sortBy)
+import Data.Ord  (comparing, Down(..))
+----------------------------------------------------------------------------
+import           Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Item = Item { itemId :: Int, itemName :: MisoString, itemScore :: Int }
+  deriving (Eq, Show)
+
+data Model = Model { _items :: [Item], _ascending :: Bool } deriving (Eq)
+
+data Action = Sort | Shuffle deriving (Eq, Show)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp initModel update view
+
+initModel :: Model
+initModel = Model
+  { _items =
+      [ Item 1 "Haskell"  95
+      , Item 2 "miso"     88
+      , Item 3 "GHC"      82
+      , Item 4 "Nix"      75
+      , Item 5 "WASM"     91
+      ]
+  , _ascending = False
+  }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Sort ->
+    modify $ \\m ->
+      let sorted = sortBy cmp (_items m)
+          cmp = if _ascending m
+                  then comparing itemScore
+                  else comparing (Down . itemScore)
+      in m { _items = sorted, _ascending = not (_ascending m) }
+  Shuffle ->
+    modify $ \\m -> m { _items = rotate (_items m) }
+  where
+    rotate []     = []
+    rotate (x:xs) = xs ++ [x]
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column", CSS.alignItems "center"
+        , CSS.gap "1rem", CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
+        [ H.button_ [ H.onClick Sort,    CSS.style_ (btnStyle "6366f1") ] [ text "Sort by score" ]
+        , H.button_ [ H.onClick Shuffle, CSS.style_ (btnStyle "334155") ] [ text "Rotate"        ]
+        ]
+    , H.ul_ [ CSS.style_ [ CSS.listStyle "none", CSS.padding "0", CSS.margin "0", CSS.display "flex", CSS.flexDirection "column", CSS.gap "0.5rem", CSS.width "18rem" ] ]
+        -- key_ ensures DOM nodes are reused/reordered, not recreated
+        (map itemRow (_items m))
+    ]
+
+itemRow :: Item -> View Model Action
+itemRow item =
+  H.li_
+    [ key_ (ms (itemId item))
+    , CSS.style_
+        [ CSS.display "flex", CSS.justifyContent "space-between"
+        , CSS.alignItems "center", CSS.padding "0.5rem 1rem"
+        , CSS.background "#1e293b", CSS.borderRadius "8px"
+        , CSS.border "1px solid #334155"
+        ]
+    ]
+    [ H.span_ [ CSS.style_ [ CSS.color (CSS.hex "e5e7eb") ] ] [ text (itemName item) ]
+    , H.span_ [ CSS.style_ [ CSS.color (CSS.hex "22c55e"), CSS.fontWeight "700" ] ] [ text (ms (itemScore item)) ]
+    ]
+
+btnStyle :: MisoString -> [CSS.Style]
+btnStyle col =
+  [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+  , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+  , CSS.cursor "pointer", CSS.fontWeight "600"
+  ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson15 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 15: Lifecycle Hooks — onCreated / onDestroyed
+-- VNode lifecycle hooks fire when a DOM node is created or destroyed.
+-- onCreated        — fires after the node is inserted into the DOM
+-- onCreatedWith    — same but passes the DOM reference (DOMRef)
+-- onDestroyed      — fires after the node is removed from the DOM
+-- These are useful for integrating third-party JS libraries.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Action
+  = Toggle
+  | NodeCreated
+  | NodeDestroyed
+  | Log MisoString
+  deriving (Eq, Show)
+
+data Model = Model
+  { _visible :: Bool
+  , _events  :: [MisoString]
+  } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model True []) update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Toggle       -> modify (\\m -> m { _visible = not (_visible m) })
+  NodeCreated  -> modify (\\m -> m { _events = "📦 node created"   : _events m })
+  NodeDestroyed-> modify (\\m -> m { _events = "🗑 node destroyed"  : _events m })
+  Log msg      -> modify (\\m -> m { _events = msg : _events m })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column", CSS.alignItems "center"
+        , CSS.gap "1.5rem", CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.button_
+        [ H.onClick Toggle
+        , CSS.style_
+            [ CSS.padding "0.5rem 1.5rem", CSS.border "none", CSS.borderRadius "8px"
+            , CSS.backgroundColor (CSS.hex "6366f1"), CSS.color (CSS.hex "fff")
+            , CSS.cursor "pointer", CSS.fontWeight "600"
+            ]
+        ]
+        [ text (if _visible m then "Hide widget" else "Show widget") ]
+    , if _visible m
+        then H.div_
+               [ onCreated NodeCreated, onDestroyed NodeDestroyed
+               , CSS.style_
+                   [ CSS.padding "1.5rem 2.5rem", CSS.borderRadius "12px"
+                   , CSS.backgroundColor (CSS.hex "1e293b")
+                   , CSS.border "1px solid #334155"
+                   , CSS.color (CSS.hex "22c55e"), CSS.fontSize "1.5rem"
+                   , CSS.fontWeight "700"
+                   ]
+               ]
+               [ text "I have lifecycle hooks!" ]
+        else fragment []
+    , H.div_
+        [ CSS.style_
+            [ CSS.width "22rem", CSS.display "flex", CSS.flexDirection "column", CSS.gap "0.35rem" ]
+        ]
+        (map eventLine (take 8 (_events m)))
+    ]
+
+eventLine :: MisoString -> View Model Action
+eventLine msg =
+  H.div_
+    [ CSS.style_
+        [ CSS.padding "0.3rem 0.75rem", CSS.borderRadius "6px"
+        , CSS.backgroundColor (CSS.hex "0f172a"), CSS.color (CSS.hex "94a3b8")
+        , CSS.fontSize "0.85rem", CSS.fontFamily "ui-monospace, monospace"
+        ]
+    ]
+    [ text msg ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson16 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 16: Nested Components — the (+>) combinator
+-- Components can be nested inside other Components.
+-- (+>) keys a child Component and embeds it in the parent's View.
+-- Each Component owns its own model; the parent only sees its own model.
+-- mount_ is an unkeyed variant (avoid if diffing could swap components).
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Lens
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+-- ── Child component ──────────────────────────────────────────────────────
+
+data ChildAction = CInc | CDec deriving (Eq, Show)
+
+childComp :: MisoString -> Component ROOT () Int ChildAction
+childComp label = vcomp 0 childUpdate (childView label)
+
+childUpdate :: ChildAction -> Effect ROOT () Int ChildAction
+childUpdate = \\case
+  CInc -> this += 1
+  CDec -> this -= 1
+
+childView :: MisoString -> () -> Int -> View Int ChildAction
+childView label _ n =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.alignItems "center", CSS.gap "0.75rem"
+        , CSS.padding "0.75rem 1.25rem", CSS.background "#1e293b"
+        , CSS.borderRadius "10px", CSS.border "1px solid #334155"
+        ]
+    ]
+    [ H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.minWidth "5rem" ] ] [ text label ]
+    , H.button_ [ H.onClick CDec, CSS.style_ smallBtn ] [ text "-" ]
+    , H.span_ [ CSS.style_ [ CSS.fontSize "1.5rem", CSS.fontWeight "700", CSS.color (CSS.hex "22c55e"), CSS.minWidth "2rem", CSS.textAlign "center" ] ]
+        [ text (ms n) ]
+    , H.button_ [ H.onClick CInc, CSS.style_ smallBtn ] [ text "+" ]
+    ]
+
+smallBtn :: [CSS.Style]
+smallBtn =
+  [ CSS.width "2rem", CSS.height "2rem", CSS.border "none", CSS.borderRadius "6px"
+  , CSS.backgroundColor (CSS.hex "0f172a"), CSS.color (CSS.hex "e5e7eb")
+  , CSS.cursor "pointer", CSS.fontSize "1.2rem"
+  ]
+
+-- ── Parent component ─────────────────────────────────────────────────────
+
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+
+app :: App () ()
+app = vcomp () noop parentView
+
+parentView :: () -> () -> View () ()
+parentView _ _ =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.25rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+        [ text "Three independent child components" ]
+    -- Each child gets a unique key and manages its own counter
+    , "counter-a" +> childComp "Counter A"
+    , "counter-b" +> childComp "Counter B"
+    , "counter-c" +> childComp "Counter C"
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson17 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 17: Props — parent-to-child data
+-- Props let a parent pass read-only data to a child Component.
+-- mountWithProps_ mounts a child with a props value.
+-- The child reads props in its view (first argument) and via getProps in update.
+-- Props are read-only from the child's perspective.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Lens
+import qualified Miso.Html          as H
+import qualified Miso.Html.Property as P
+import qualified Miso.CSS           as CSS
+----------------------------------------------------------------------------
+-- ── Props type ────────────────────────────────────────────────────────────
+data Theme = Theme { themeAccent :: MisoString, themeName :: MisoString }
+  deriving (Eq)
+
+-- ── Child component ───────────────────────────────────────────────────────
+data ChildAction = Noop deriving (Eq, Show)
+
+child :: Component ParentModel Theme Int ChildAction
+child = vcomp 0 childUpdate childView
+
+childUpdate :: ChildAction -> Effect ParentModel Theme Int ChildAction
+childUpdate Noop = pure ()
+
+childView :: Theme -> Int -> View Int ChildAction
+childView theme n =
+  H.div_
+    [ CSS.style_
+        [ CSS.padding "1.25rem 2rem", CSS.borderRadius "12px"
+        , CSS.border ("2px solid " <> themeAccent theme)
+        , CSS.backgroundColor (CSS.hex "1e293b")
+        ]
+    ]
+    [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex (themeAccent theme)), CSS.fontWeight "700", CSS.margin "0 0 0.5rem 0" ] ]
+        [ text ("Theme: " <> themeName theme) ]
+    , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "e5e7eb"), CSS.margin "0", CSS.fontSize "0.9rem" ] ]
+        [ text "I read my accent color from props." ]
+    ]
+
+-- ── Parent component ─────────────────────────────────────────────────────
+data ParentAction = Switch deriving (Eq, Show)
+
+data ParentModel = ParentModel { _themeIdx :: Int } deriving (Eq)
+
+themes :: [Theme]
+themes =
+  [ Theme "22c55e" "Green"
+  , Theme "6366f1" "Indigo"
+  , Theme "f59e0b" "Amber"
+  , Theme "ef4444" "Red"
+  ]
+
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+
+app :: App ParentModel ParentAction
+app = vcomp (ParentModel 0) parentUpdate parentView
+
+parentUpdate :: ParentAction -> Effect ROOT () ParentModel ParentAction
+parentUpdate Switch = modify (\\m -> m { _themeIdx = (_themeIdx m + 1) \`mod\` length themes })
+
+parentView :: () -> ParentModel -> View ParentModel ParentAction
+parentView _ m =
+  let t = themes !! _themeIdx m
+  in H.div_
+       [ CSS.style_
+           [ CSS.display "flex", CSS.flexDirection "column"
+           , CSS.alignItems "center", CSS.gap "1.5rem"
+           , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+           ]
+       ]
+       [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+           [ text "Parent passes theme props to child" ]
+       -- mountWithProps_ key props component
+       , mountWithProps_ "themed-child" t child
+       , H.button_
+           [ H.onClick Switch
+           , CSS.style_
+               [ CSS.padding "0.5rem 1.5rem", CSS.border "none", CSS.borderRadius "8px"
+               , CSS.backgroundColor (CSS.hex (themeAccent t)), CSS.color (CSS.hex "fff")
+               , CSS.cursor "pointer", CSS.fontWeight "600"
+               ]
+           ]
+           [ text "Switch theme" ]
+       ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson18 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 18: Effect — io, io_, sync
+-- The Effect monad schedules IO without executing it immediately.
+-- io  :: IO action -> Effect ...   — async, delivers action to the queue
+-- io_ :: IO ()    -> Effect ...   — async, fire-and-forget
+-- sync :: IO action -> Effect ... — synchronous (blocks the scheduler)
+-- withSink gives direct access to the event Sink for advanced use cases.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Control.Concurrent (threadDelay)
+import System.IO          (hFlush, stdout)
+----------------------------------------------------------------------------
+import           Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Action
+  = PrintHello
+  | FetchCount
+  | GotCount Int
+  | SyncAction
+  deriving (Eq, Show)
+
+newtype Model = Model { _result :: MisoString } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model "—") update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  -- io_ schedules fire-and-forget IO asynchronously
+  PrintHello -> io_ $ do
+    putStrLn "Hello from IO! (check stdout panel)"
+    hFlush stdout
+
+  -- io schedules IO that delivers an action when done
+  FetchCount -> do
+    modify (\\m -> m { _result = "loading…" })
+    io $ do
+      threadDelay 800000            -- simulate a 0.8 s fetch
+      pure (GotCount 42)
+
+  GotCount n ->
+    modify (\\m -> m { _result = "Got: " <> ms n })
+
+  -- sync runs IO synchronously (blocks; use sparingly)
+  SyncAction -> do
+    io_ (putStrLn "sync action fired" >> hFlush stdout)
+    modify (\\m -> m { _result = "sync done" })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.25rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+        [ text "IO in the Effect monad" ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
+        [ btn PrintHello "io_ (print)"  "6366f1"
+        , btn FetchCount "io (async)"   "22c55e"
+        , btn SyncAction "sync"         "f59e0b"
+        ]
+    , H.div_
+        [ CSS.style_
+            [ CSS.padding "0.75rem 2rem", CSS.borderRadius "8px"
+            , CSS.backgroundColor (CSS.hex "1e293b"), CSS.color (CSS.hex "22c55e")
+            , CSS.fontSize "1.2rem", CSS.fontWeight "700"
+            , CSS.fontFamily "ui-monospace, monospace"
+            ]
+        ]
+        [ text (_result m) ]
+    ]
+
+btn :: Action -> MisoString -> MisoString -> View Model Action
+btn action label col =
+  H.button_
+    [ H.onClick action
+    , CSS.style_
+        [ CSS.padding "0.5rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+        , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+        , CSS.cursor "pointer", CSS.fontWeight "600"
+        ]
+    ]
+    [ text label ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson19 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE DeriveGeneric     #-}
+----------------------------------------------------------------------------
+-- Lesson 19: JSON — encode / decode / ToJSON / FromJSON
+-- Miso.JSON is a microaeson-inspired JSON library for MisoString.
+-- Derive ToJSON/FromJSON via GHC.Generics.
+-- encode/decode work on the JS runtime on the client (fast).
+-- The event decoder system (Miso.Event.Decoder) also uses these types.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import GHC.Generics (Generic)
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.JSON
+import qualified Miso.Html          as H
+import qualified Miso.Html.Property as P
+import qualified Miso.CSS           as CSS
+----------------------------------------------------------------------------
+data Person = Person
+  { name :: MisoString
+  , age  :: Int
+  } deriving (Generic, Eq, Show)
+
+instance ToJSON   Person
+instance FromJSON Person
+----------------------------------------------------------------------------
+data Model = Model
+  { _name    :: MisoString
+  , _age     :: MisoString
+  , _encoded :: MisoString
+  , _decoded :: MisoString
+  } deriving (Eq)
+
+data Action
+  = SetName MisoString
+  | SetAge  MisoString
+  | Encode
+  | Decode
+  deriving (Eq, Show)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model "Alice" "30" "" "") update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  SetName n -> modify (\\m -> m { _name = n })
+  SetAge a  -> modify (\\m -> m { _age  = a })
+  Encode -> do
+    m <- get
+    let ageN = case reads (fromMisoString (_age m)) of { ((n,_):_) -> n; _ -> 0 } :: Int
+        p   = Person { name = _name m, age = ageN }
+        enc = encode p
+    modify (\\m2 -> m2 { _encoded = enc, _decoded = "" })
+  Decode -> do
+    m <- get
+    let dec = decode (_encoded m) :: Maybe Person
+        msg = case dec of
+                Nothing -> "parse error"
+                Just p  -> "name=" <> name p <> " age=" <> ms (age p)
+    modify (\\m2 -> m2 { _decoded = msg })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.25rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif", CSS.width "100%"
+        , "box-sizing" =: "border-box"
+        ]
+    ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+        [ text "JSON encode / decode" ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem", CSS.alignItems "center" ] ]
+        [ label_ "Name"
+        , input_ SetName (_name m)
+        , label_ "Age"
+        , input_ SetAge  (_age m)
+        ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
+        [ btn Encode "Encode →" "6366f1"
+        , btn Decode "← Decode" "22c55e"
+        ]
+    , codeBox (_encoded m)
+    , if _decoded m /= "" then codeBox (_decoded m) else fragment []
+    ]
+
+label_ :: MisoString -> View Model Action
+label_ t = H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280") ] ] [ text t ]
+
+input_ :: (MisoString -> Action) -> MisoString -> View Model Action
+input_ f val =
+  H.input_
+    [ H.onInput f, P.value_ val
+    , CSS.style_
+        [ CSS.padding "0.3rem 0.6rem", CSS.borderRadius "6px"
+        , CSS.border "1px solid #334155", CSS.background "#1e293b"
+        , CSS.color (CSS.hex "e5e7eb"), CSS.width "7rem", "outline" =: "none"
+        ]
+    ]
+
+btn :: Action -> MisoString -> MisoString -> View Model Action
+btn action lbl col =
+  H.button_
+    [ H.onClick action
+    , CSS.style_
+        [ CSS.padding "0.4rem 1.1rem", CSS.border "none", CSS.borderRadius "8px"
+        , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+        , CSS.cursor "pointer", CSS.fontWeight "600"
+        ]
+    ]
+    [ text lbl ]
+
+codeBox :: MisoString -> View Model Action
+codeBox t =
+  H.div_
+    [ CSS.style_
+        [ CSS.padding "0.6rem 1rem", CSS.borderRadius "8px"
+        , CSS.backgroundColor (CSS.hex "0f172a"), CSS.color (CSS.hex "22c55e")
+        , CSS.fontFamily "ui-monospace, monospace", CSS.fontSize "0.85rem"
+        , CSS.maxWidth "28rem", "word-break" =: "break-all"
+        ]
+    ]
+    [ text t ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson20 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+----------------------------------------------------------------------------
+-- Lesson 20: Router — type-safe client-side navigation
+-- Miso.Router provides a reversible type-safe URL router.
+-- routerSub listens to popstate events and delivers parsed routes.
+-- pushRoute serialises a route to a URI and pushes it onto the History stack.
+-- prettyRoute converts a route back to a URL string.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import GHC.Generics (Generic)
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Router
+import           Miso.Subscription.History (routerSub, pushRoute, URI(..))
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Route
+  = Home
+  | About
+  | Item (Capture "id" Int)
+  deriving stock    (Show, Eq, Generic)
+  deriving anyclass Router
+----------------------------------------------------------------------------
+data Model = Model { _route :: Route } deriving (Eq)
+
+data Action
+  = Navigate Route
+  | HandleRoute (Either RoutingError Route)
+  deriving (Eq, Show)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = (vcomp (Model Home) update view) { subs = [routerSub HandleRoute] }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Navigate r -> io_ (pushRoute r)
+  HandleRoute (Right r) -> modify (\\m -> m { _route = r })
+  HandleRoute (Left  _) -> modify (\\m -> m { _route = Home })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.nav_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
+        [ navBtn Home  "Home"
+        , navBtn About "About"
+        , navBtn (Item (Capture 1)) "Item 1"
+        , navBtn (Item (Capture 2)) "Item 2"
+        ]
+    , H.div_
+        [ CSS.style_
+            [ CSS.padding "1.5rem 2.5rem", CSS.borderRadius "12px"
+            , CSS.backgroundColor (CSS.hex "1e293b"), CSS.border "1px solid #334155"
+            , CSS.color (CSS.hex "e5e7eb"), CSS.minWidth "18rem", CSS.textAlign "center"
+            ]
+        ]
+        [ H.h2_ [ CSS.style_ [ CSS.margin "0 0 0.5rem 0", CSS.color (CSS.hex "22c55e") ] ]
+            [ text (pageTitle (_route m)) ]
+        , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0", CSS.fontSize "0.85rem" ] ]
+            [ text ("URL: " <> ms (prettyRoute (_route m))) ]
+        ]
+    ]
+
+pageTitle :: Route -> MisoString
+pageTitle Home       = "🏠 Home"
+pageTitle About      = "ℹ About"
+pageTitle (Item (Capture n)) = "📦 Item #" <> ms n
+
+navBtn :: Route -> MisoString -> View Model Action
+navBtn r label =
+  H.button_
+    [ H.onClick (Navigate r)
+    , CSS.style_
+        [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+        , CSS.backgroundColor (CSS.hex "334155"), CSS.color (CSS.hex "e5e7eb")
+        , CSS.cursor "pointer", CSS.fontWeight "600"
+        ]
+    ]
+    [ text label ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson21 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 21: rAFSub — requestAnimationFrame subscription
+-- Miso.Subscription.RAF.rAFSub hooks into the browser's requestAnimationFrame
+-- API for smooth 60 FPS animations outside of the Canvas monad.
+-- It delivers a DOMHighResTimeStamp (Double, milliseconds) on each frame.
+-- Use it to drive any model-based animation: counters, positions, physics.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Subscription.RAF (rAFSub)
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Action = Tick Double deriving (Eq, Show)
+
+data Model = Model
+  { _time    :: Double   -- seconds since start
+  , _startMs :: Double   -- first timestamp (for relative time)
+  , _started :: Bool
+  } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = (vcomp (Model 0 0 False) update view) { subs = [rAFSub Tick] }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Tick ms -> modify $ \\m ->
+    if not (_started m)
+      then m { _startMs = ms, _started = True, _time = 0 }
+      else m { _time = (ms - _startMs m) / 1000.0 }
+----------------------------------------------------------------------------
+-- Pure CSS animation driven by model state
+view :: props -> Model -> View Model Action
+view _ m =
+  let t   = _time m
+      -- bouncing ball: y oscillates via sin, x via cos at half speed
+      x   = 45 + 40 * cos (t * 1.1)      -- percent
+      y   = 45 + 40 * sin (t * 0.9)      -- percent
+      hue = round (t * 60) \`mod\` 360 :: Int
+  in H.div_
+       [ CSS.style_
+           [ CSS.position "relative", CSS.width "300px", CSS.height "300px"
+           , CSS.margin "2rem auto"
+           , CSS.backgroundColor (CSS.hex "0b1120")
+           , CSS.borderRadius "12px", CSS.border "1px solid #1f2937"
+           , "overflow" =: "hidden"
+           ]
+       ]
+       [ H.div_
+           [ CSS.style_
+               [ CSS.position "absolute"
+               , CSS.left (ms (round x :: Int) <> "%")
+               , CSS.top  (ms (round y :: Int) <> "%")
+               , CSS.width "24px", CSS.height "24px"
+               , CSS.borderRadius "50%"
+               , CSS.backgroundColor ("hsl(" <> ms hue <> ",90%,60%)")
+               , CSS.transform "translate(-50%,-50%)"
+               ]
+           ]
+           []
+       , H.div_
+           [ CSS.style_
+               [ CSS.position "absolute", CSS.bottom "8px", CSS.left "0", CSS.right "0"
+               , CSS.textAlign "center", CSS.color (CSS.hex "6b7280")
+               , CSS.fontSize "0.75rem", CSS.fontFamily "ui-monospace, monospace"
+               ]
+           ]
+           [ text ("t = " <> ms (fromIntegral (round (_time m * 100) :: Int) / 100.0 :: Double) <> "s") ]
+       ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson22 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 22: Miso.DSL — JavaScript interop
+-- Miso.DSL provides a JS DSL for calling into the browser from Haskell.
+-- Key operators (re-exported from Miso):
+--   jsg  "name"        — access a global JS variable
+--   obj ! "key"        — property access: obj.key
+--   obj # "method" args — method call: obj.method(...args)
+--   jsgf "fn" args     — call a global function
+--   new obj args       — construct: new obj(...args)
+-- Values cross the boundary via ToJSVal / FromJSVal.
+-- fromJSValUnchecked — convert JSVal → Haskell (throws on failure)
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.FFI (now)
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Action
+  = GetTitle
+  | GotTitle MisoString
+  | AlertMsg
+  | GetTimestamp
+  | GotTimestamp Double
+  | Noop
+  deriving (Eq, Show)
+
+data Model = Model
+  { _title     :: MisoString
+  , _timestamp :: MisoString
+  } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model "" "") update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  -- Read document.title via the DSL
+  GetTitle -> io $ do
+    doc   <- jsg "document"
+    title <- fromJSValUnchecked =<< doc ! "title"
+    pure (GotTitle title)
+
+  GotTitle t -> modify (\\m -> m { _title = t })
+
+  -- Call window.alert
+  AlertMsg -> io_ $ do
+    win <- jsg "window"
+    _ <- win # "alert" $ ["Hello from Miso.DSL!" :: MisoString]
+    pure ()
+
+  -- performance.now() via Miso.FFI
+  GetTimestamp -> io $ GotTimestamp <$> now
+
+  GotTimestamp t ->
+    modify (\\m -> m { _timestamp = ms (round t :: Int) <> " ms" })
+
+  Noop -> pure ()
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.25rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+        [ text "Miso.DSL — JavaScript interop" ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem", CSS.flexWrap "wrap", CSS.justifyContent "center" ] ]
+        [ btn GetTitle     "document.title"    "6366f1"
+        , btn AlertMsg     "window.alert()"    "f59e0b"
+        , btn GetTimestamp "performance.now()" "22c55e"
+        ]
+    , resultBox "document.title"    (_title m)
+    , resultBox "performance.now()" (_timestamp m)
+    ]
+
+btn :: Action -> MisoString -> MisoString -> View Model Action
+btn action lbl col =
+  H.button_
+    [ H.onClick action
+    , CSS.style_
+        [ CSS.padding "0.45rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+        , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+        , CSS.cursor "pointer", CSS.fontWeight "600", CSS.fontSize "0.85rem"
+        ]
+    ]
+    [ text lbl ]
+
+resultBox :: MisoString -> MisoString -> View Model Action
+resultBox label val =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.alignItems "center", CSS.gap "0.75rem"
+        , CSS.padding "0.5rem 1rem", CSS.borderRadius "8px"
+        , CSS.backgroundColor (CSS.hex "1e293b"), CSS.minWidth "22rem"
+        ]
+    ]
+    [ H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.8rem", CSS.minWidth "10rem" ] ] [ text label ]
+    , H.span_ [ CSS.style_ [ CSS.color (CSS.hex "22c55e"), CSS.fontFamily "ui-monospace, monospace" ] ]
+        [ text (if val == "" then "—" else val) ]
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson23 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE QuasiQuotes       #-}
+----------------------------------------------------------------------------
+-- Lesson 23: Miso.FFI.QQ — inline JavaScript quasi-quoter
+-- The 'js' QuasiQuoter lets you embed JavaScript directly in Haskell source.
+-- Haskell bindings in scope are interpolated with \${varName} syntax.
+-- Their ToJSVal instance is used to marshal values across the boundary.
+-- The return type is inferred from the call site via FromJSVal.
+-- Fire-and-forget: IO ()   — for side effects
+-- Return a value:  IO a    — type drives the FromJSVal decoding
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.FFI.QQ (js)
+import qualified Miso.Html          as H
+import qualified Miso.Html.Property as P
+import qualified Miso.CSS           as CSS
+----------------------------------------------------------------------------
+data Action
+  = Log MisoString
+  | Compute
+  | GotResult Int
+  | SetInput MisoString
+  deriving (Eq, Show)
+
+data Model = Model
+  { _input  :: MisoString
+  , _result :: MisoString
+  } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model "5" "") update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  SetInput s -> modify (\\m -> m { _input = s })
+
+  -- io_ schedules fire-and-forget JS via QQ
+  Log msg -> io_ [js| console.log("from Haskell:", \${msg}) |]
+
+  -- io schedules JS that returns a value
+  Compute -> do
+    m <- get
+    let n = (fromMisoString (_input m) :: Int)
+    io $ GotResult <$> [js|
+      let x = 1;
+      for (let i = 2; i <= \${n}; i++) { x *= i; }
+      return x;
+    |]
+
+  GotResult r ->
+    modify (\\m -> m { _result = ms r })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
+        [ text "[js| ... |] — inline JavaScript" ]
+    , H.div_
+        [ CSS.style_ [ CSS.display "flex", CSS.alignItems "center", CSS.gap "0.75rem" ] ]
+        [ H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280") ] ] [ text "n!" ]
+        , H.input_
+            [ H.onInput SetInput, P.value_ (_input m)
+            , P.type_ "number"
+            , CSS.style_
+                [ CSS.width "4rem", CSS.padding "0.3rem 0.5rem"
+                , CSS.borderRadius "6px", CSS.border "1px solid #334155"
+                , CSS.background "#1e293b", CSS.color (CSS.hex "e5e7eb")
+                , "outline" =: "none"
+                ]
+            ]
+        , H.button_
+            [ H.onClick Compute
+            , CSS.style_
+                [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                , CSS.backgroundColor (CSS.hex "22c55e"), CSS.color (CSS.hex "fff")
+                , CSS.cursor "pointer", CSS.fontWeight "600"
+                ]
+            ]
+            [ text "Compute factorial in JS" ]
+        ]
+    , H.div_
+        [ CSS.style_
+            [ CSS.fontSize "2.5rem", CSS.fontWeight "700", CSS.color (CSS.hex "22c55e")
+            , CSS.fontFamily "ui-monospace, monospace"
+            ]
+        ]
+        [ text (if _result m == "" then "—" else _result m) ]
+    , H.button_
+        [ H.onClick (Log ("hello from lesson 23, n=" <> _input m))
+        , CSS.style_
+            [ CSS.padding "0.35rem 0.9rem", CSS.border "none", CSS.borderRadius "8px"
+            , CSS.backgroundColor (CSS.hex "334155"), CSS.color (CSS.hex "9ca3af")
+            , CSS.cursor "pointer", CSS.fontSize "0.85rem"
+            ]
+        ]
+        [ text "console.log via [js|...|]  (check browser console)" ]
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson24 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 24: Event Delegation, Bubble/Capture, custom Decoder
+--
+-- EVENT DELEGATION
+--   Miso attaches a single listener to <body> (not to each node).
+--   Events are routed through the virtual DOM to matching handlers.
+--   The 'Events' map (passed to startApp) declares which events are
+--   delegated and in which phase: defaultEvents, keyboardEvents, etc.
+--   You can add custom events:  defaultEvents <> M.fromList [("myevent", BUBBLE)]
+--
+-- BUBBLE vs CAPTURE
+--   on        — handles the event in the BUBBLE phase (default, most common)
+--   onCapture — handles the event in the CAPTURE phase (fires top-down)
+--   The difference matters when a parent and child both handle the same event:
+--     CAPTURE: parent fires first, then child.
+--     BUBBLE:  child fires first, then parent.
+--   Use 'stopPropagation' (Options) to prevent further routing.
+--
+-- on / onCapture / onWithOptions signatures:
+--   on           :: MisoString -> Decoder r -> (r -> DOMRef -> action) -> Attribute action
+--   onCapture    :: MisoString -> Decoder r -> (r -> DOMRef -> action) -> Attribute action
+--   onWithOptions :: Phase -> Options -> MisoString -> Decoder r -> (r -> DOMRef -> action) -> Attribute action
+--
+-- CUSTOM DECODER
+--   A Decoder carries a JSON parser and the path to decode at:
+--     data Decoder a = Decoder { decoder :: Value -> Parser a, decodeAt :: DecodeTarget }
+--   DecodeTarget ["target"]  — decode event.target
+--   DecodeTarget []          — decode the event object itself
+--   Use 'withObject', '(.:)', '(.:?)' from Miso.JSON to build parsers.
+--   The 'at' smart constructor: at ["target"] (\v -> ...)
+--
+-- OPTIONS
+--   preventDefault  :: Options  — calls event.preventDefault()
+--   stopPropagation :: Options  — calls event.stopPropagation()
+--   defaultOptions  :: Options  — neither (the default)
+--   Combine: preventDefault <> stopPropagation
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import qualified Data.Map.Strict as M
+----------------------------------------------------------------------------
+import           Miso
+import           Miso.Event (on, onCapture, onWithOptions, Phase(..))
+import           Miso.Event.Decoder (Decoder(..), DecodeTarget(..), emptyDecoder, valueDecoder, at)
+import           Miso.Event.Types (Options(..), defaultOptions, preventDefault, stopPropagation)
+import           Miso.JSON (withObject, (.:), (.:?))
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+-- Custom decoder: reads event.target.dataset.kind
+-- DecodeTarget ["target","dataset"] navigates the event JSON to target.dataset
+-- then parses the "kind" field as a MisoString.
+dataKindDecoder :: Decoder MisoString
+dataKindDecoder = Decoder
+  { decodeAt = DecodeTarget ["target", "dataset"]
+  , decoder  = withObject "dataset" $ \\o ->
+      o .: "kind"
+  }
+
+-- Alternative: read from event.target directly using a custom path
+-- dataKindDecoder = at ["target","dataset"] (withObject "ds" (\\o -> o .: "kind"))
+
+-- Custom decoder: reads scrollTop of a scrollable container
+scrollDecoder :: Decoder Double
+scrollDecoder = at ["target"] $ withObject "target" $ \\o ->
+  o .: "scrollTop"
+----------------------------------------------------------------------------
+data Action
+  = BubbleClick  MisoString   -- fired on inner or outer in bubble phase
+  | CaptureClick MisoString   -- fired on outer in capture phase (fires first)
+  | CustomKind   MisoString   -- from dataKindDecoder
+  | Scrolled     Double       -- from scrollDecoder
+  | Clear
+  deriving (Eq, Show)
+
+data Model = Model
+  { _log      :: [MisoString]
+  , _scroll   :: Double
+  } deriving (Eq)
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp myEvents app { mountPoint = Just "app" }
+
+-- We need "scroll" in the event map; defaultEvents does not include it.
+myEvents :: Events
+myEvents = defaultEvents <> M.fromList [("scroll", BUBBLE)]
+----------------------------------------------------------------------------
+app :: App Model Action
+app = vcomp (Model [] 0) update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  BubbleClick  s -> modify (\\m -> m { _log = ("BUBBLE: " <> s)  : take 7 (_log m) })
+  CaptureClick s -> modify (\\m -> m { _log = ("CAPTURE: " <> s) : take 7 (_log m) })
+  CustomKind   s -> modify (\\m -> m { _log = ("kind=" <> s)     : take 7 (_log m) })
+  Scrolled     y -> modify (\\m -> m { _scroll = y })
+  Clear          -> modify (\\m -> m { _log = [] })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_
+        [ CSS.display "flex", CSS.flexDirection "column"
+        , CSS.alignItems "center", CSS.gap "1.5rem"
+        , CSS.padding "1.5rem", CSS.fontFamily "system-ui, sans-serif"
+        ]
+    ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0", CSS.fontSize "0.95rem" ] ]
+        [ text "Event delegation, bubble / capture, custom Decoder" ]
+
+    -- ── Section 1: bubble vs capture ─────────────────────────────────────
+    , section "1. Bubble vs Capture — click the inner box"
+    , H.div_
+        [ -- CAPTURE on outer: fires first (top-down)
+          onCapture "click" emptyDecoder (\\_ _ -> CaptureClick "outer (capture)")
+          -- BUBBLE  on outer: fires last  (bottom-up)
+        , on "click" emptyDecoder (\\_ _ -> BubbleClick "outer (bubble)")
+        , CSS.style_
+            [ CSS.padding "1.5rem", CSS.border "2px solid #6366f1"
+            , CSS.borderRadius "10px", CSS.cursor "pointer"
+            , CSS.backgroundColor (CSS.hex "1e293b")
+            ]
+        ]
+        [ H.div_
+            [ -- Only bubble on inner — fires between outer-capture and outer-bubble
+              on "click" emptyDecoder (\\_ _ -> BubbleClick "inner (bubble)")
+            , CSS.style_
+                [ CSS.padding "0.75rem 1.5rem", CSS.border "2px solid #22c55e"
+                , CSS.borderRadius "8px", CSS.cursor "pointer"
+                , CSS.backgroundColor (CSS.hex "0f172a"), CSS.color (CSS.hex "22c55e")
+                , CSS.fontWeight "700"
+                ]
+            ]
+            [ text "Click me (inner)" ]
+        , H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.8rem" ] ]
+            [ text " ← outer (capture + bubble)" ]
+        ]
+
+    -- ── Section 2: stopPropagation via onWithOptions ──────────────────────
+    , section "2. stopPropagation — click the button (no outer bubble fires)"
+    , H.div_
+        [ on "click" emptyDecoder (\\_ _ -> BubbleClick "outer (should NOT fire)")
+        , CSS.style_
+            [ CSS.padding "1rem", CSS.border "2px solid #f59e0b"
+            , CSS.borderRadius "10px", CSS.backgroundColor (CSS.hex "1e293b")
+            ]
+        ]
+        [ H.button_
+            [ onWithOptions BUBBLE stopPropagation "click" emptyDecoder
+                (\\_ _ -> BubbleClick "inner — stopPropagation")
+            , CSS.style_
+                [ CSS.padding "0.5rem 1.25rem", CSS.border "none", CSS.borderRadius "8px"
+                , CSS.backgroundColor (CSS.hex "f59e0b"), CSS.color (CSS.hex "fff")
+                , CSS.cursor "pointer", CSS.fontWeight "600"
+                ]
+            ]
+            [ text "Click (stops propagation)" ]
+        ]
+
+    -- ── Section 3: custom Decoder reading data-kind ───────────────────────
+    , section "3. Custom Decoder — reads data-kind from clicked button"
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
+        [ kindBtn "primary"   "6366f1"
+        , kindBtn "secondary" "22c55e"
+        , kindBtn "danger"    "ef4444"
+        ]
+
+    -- ── Section 4: scroll decoder ─────────────────────────────────────────
+    , section "4. Scroll Decoder — reads scrollTop from event.target"
+    , H.div_
+        [ on "scroll" scrollDecoder (\\y _ -> Scrolled y)
+        , CSS.style_
+            [ CSS.height "80px", CSS.overflowY "scroll", CSS.width "18rem"
+            , CSS.padding "0.5rem", CSS.border "1px solid #334155"
+            , CSS.borderRadius "8px", CSS.backgroundColor (CSS.hex "0f172a")
+            ]
+        ]
+        (map (\\i -> H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0.2rem 0" ] ]
+            [ text ("Line " <> ms (i :: Int)) ]) [1..12])
+
+    , H.div_ [ CSS.style_ [ CSS.color (CSS.hex "22c55e"), CSS.fontFamily "ui-monospace, monospace", CSS.fontSize "0.85rem" ] ]
+        [ text ("scrollTop = " <> ms (round (_scroll m) :: Int) <> "px") ]
+
+    -- ── Event log ─────────────────────────────────────────────────────────
+    , H.div_ [ CSS.style_ [ CSS.width "22rem" ] ]
+        [ H.div_
+            [ CSS.style_ [ CSS.display "flex", CSS.justifyContent "space-between", CSS.alignItems "center", CSS.marginBottom "0.4rem" ] ]
+            [ H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.8rem" ] ] [ text "Event log (newest first)" ]
+            , H.button_ [ H.onClick Clear, CSS.style_ [ CSS.border "none", CSS.background "none", CSS.color (CSS.hex "6b7280"), CSS.cursor "pointer", CSS.fontSize "0.8rem" ] ] [ text "clear" ]
+            ]
+        , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.flexDirection "column", CSS.gap "0.25rem" ] ]
+            (map logLine (_log m))
+        ]
+    ]
+
+-- ── Helpers ───────────────────────────────────────────────────────────────
+
+section :: MisoString -> View Model Action
+section t =
+  H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.8rem", CSS.margin "0", CSS.fontWeight "600", CSS.letterSpacing "0.05em" ] ]
+    [ text t ]
+
+-- Button with a data-kind HTML attribute; read by dataKindDecoder
+kindBtn :: MisoString -> MisoString -> View Model Action
+kindBtn kind col =
+  H.button_
+    [ on "click" dataKindDecoder (\\k _ -> CustomKind k)
+    , prop "data-kind" kind
+    , CSS.style_
+        [ CSS.padding "0.45rem 1.1rem", CSS.border "none", CSS.borderRadius "8px"
+        , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+        , CSS.cursor "pointer", CSS.fontWeight "600"
+        ]
+    ]
+    [ text kind ]
+
+logLine :: MisoString -> View Model Action
+logLine msg =
+  H.div_
+    [ CSS.style_
+        [ CSS.padding "0.25rem 0.6rem", CSS.borderRadius "5px"
+        , CSS.backgroundColor (CSS.hex "0f172a"), CSS.color (CSS.hex "94a3b8")
+        , CSS.fontFamily "ui-monospace, monospace", CSS.fontSize "0.78rem"
+        ]
+    ]
+    [ text msg ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson25 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 25: Fetch API — getJSON / postJSON / Response
+--
+-- Miso.Fetch wraps the browser's Fetch API with Haskell types.
+-- All functions are re-exported from Miso, so no extra import is needed.
+--
+-- getJSON
+--   :: (FromJSON body, FromJSVal error)
+--   => MisoString                    -- URL
+--   -> [(MisoString, MisoString)]    -- extra headers (empty = none)
+--   -> (Response body  -> action)    -- success callback
+--   -> (Response error -> action)    -- error callback
+--   -> Effect parent props model action
+--
+-- postJSON / putJSON / deleteJSON follow the same pattern with a body argument.
+--
+-- data Response body = Response
+--   { status       :: Maybe Int              -- HTTP status code
+--   , headers      :: Map MisoString MisoString
+--   , errorMessage :: Maybe MisoString       -- set on failure
+--   , body         :: body                   -- decoded body
+--   }
+--
+-- Typical pattern:
+--   getJSON url [] (GotData . body) (\r -> GotError (errorMessage r))
+--
+-- The URL below is JSONPlaceholder — a public CORS-friendly test API.
+-- Expect response: {"userId":1,"id":1,"title":"...","completed":true}
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Todo = Todo
+  { _userId    :: Int
+  , _todoId    :: Int
+  , _title     :: MisoString
+  , _completed :: Bool
+  } deriving (Eq)
+
+instance FromJSON Todo where
+  parseJSON = withObject "Todo" $ \\o -> Todo
+    <$> o .: "userId"
+    <*> o .: "id"
+    <*> o .: "title"
+    <*> o .: "completed"
+----------------------------------------------------------------------------
+data LoadState = Idle | Loading | Done Todo | Err MisoString
+  deriving Eq
+
+type Model = LoadState
+
+data Action
+  = Fetch
+  | GotTodo Todo
+  | GotError MisoString
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+
+app :: App Model Action
+app = vcomp Idle update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Fetch ->
+    modify (const Loading) >>
+    getJSON "https://jsonplaceholder.typicode.com/todos/1" []
+      (GotTodo . body)
+      (\\r -> GotError (case errorMessage r of
+                          Just e  -> e
+                          Nothing -> "network error"))
+  GotTodo t -> modify (const (Done t))
+  GotError e -> modify (const (Err e))
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "30rem", CSS.margin "auto" ] ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem", CSS.margin "0 0 1rem 0" ] ]
+        [ text "Lesson 25: Fetch API — getJSON / Response" ]
+
+    , H.button_
+        [ H.onClick Fetch
+        , CSS.style_ [ CSS.padding "0.5rem 1.25rem", CSS.border "none", CSS.borderRadius "8px"
+                     , CSS.backgroundColor (CSS.hex "6366f1"), CSS.color (CSS.hex "fff")
+                     , CSS.cursor "pointer", CSS.fontWeight "700" ]
+        ]
+        [ text "GET /todos/1" ]
+
+    , H.div_ [ CSS.style_ [ CSS.marginTop "1rem" ] ]
+        [ case m of
+            Idle    -> text "Click to fetch data from the JSONPlaceholder API."
+            Loading -> text "Loading…"
+            Err msg -> H.p_ [ CSS.style_ [ CSS.color (CSS.hex "ef4444") ] ] [ text ("Error: " <> msg) ]
+            Done t  ->
+              H.div_
+                [ CSS.style_ [ CSS.backgroundColor (CSS.hex "0f172a"), CSS.borderRadius "10px"
+                              , CSS.padding "1rem", CSS.fontFamily "ui-monospace,monospace"
+                              , CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.85rem"
+                              , CSS.lineHeight "1.9" ] ]
+                [ H.p_ [] [ text ("userId:    " <> ms (_userId    t)) ]
+                , H.p_ [] [ text ("id:        " <> ms (_todoId    t)) ]
+                , H.p_ [] [ text ("title:     " <> _title      t) ]
+                , H.p_ [] [ text ("completed: " <> ms (_completed t)) ]
+                ]
+        ]
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson26 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 26: withSink — direct Sink access
+--
+-- withSink is the primitive from which io / io_ / getJSON and all
+-- other Effect combinators are built.
+--
+-- withSink :: (Sink action -> IO ()) -> Effect parent props model action
+--
+-- 'Sink action' is just a function:  type Sink action = action -> IO ()
+-- Calling  sink myAction  enqueues 'myAction' into the miso event loop.
+--
+-- When to use withSink directly:
+--   - Initialising a 3rd-party JS library that fires callbacks
+--   - Registering event listeners outside of miso's delegation system
+--   - Any async IO that needs to schedule actions from inside callbacks
+--
+-- io / io_ are thin wrappers:
+--   io  action = withSink (action >>=)        -- run IO, sink the result
+--   io_ action = withSink (\\_ -> void action) -- run IO, ignore the result
+--
+-- This lesson shows a "ping" that reads the browser's performance.now()
+-- timestamp, then feeds it back into the update loop via the Sink.
+-- Pressing "Ping" fires withSink directly; the callback calls 'sink Pong'.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Miso
+import Miso.FFI (now)
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Model = Model
+  { _pings :: [Double]   -- timestamps received via Sink
+  , _count :: Int
+  } deriving Eq
+
+data Action
+  = Ping          -- triggers withSink
+  | Pong Double   -- fired from inside the IO callback via sink
+  | Clear
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+
+app :: App Model Action
+app = vcomp (Model [] 0) update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Ping ->
+    -- withSink gives us the Sink directly — we call sink ourselves
+    withSink $ \\sink -> do
+      t <- now           -- performance.now() → DOMHighResTimeStamp (ms)
+      sink (Pong t)      -- enqueue Pong into the miso event loop
+  Pong t ->
+    modify (\\m -> m { _pings = t : take 5 (_pings m)
+                    , _count = _count m + 1 })
+  Clear ->
+    modify (\\_ -> Model [] 0)
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "26rem", CSS.margin "auto" ] ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem", CSS.margin "0 0 1rem 0" ] ]
+        [ text "Lesson 26: withSink" ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem", CSS.marginBottom "1rem" ] ]
+        [ H.button_
+            [ H.onClick Ping
+            , CSS.style_ [ CSS.padding "0.5rem 1.25rem", CSS.border "none", CSS.borderRadius "8px"
+                         , CSS.backgroundColor (CSS.hex "6366f1"), CSS.color (CSS.hex "fff")
+                         , CSS.cursor "pointer", CSS.fontWeight "700" ] ]
+            [ text ("Ping (" <> ms (_count m) <> ")") ]
+        , H.button_
+            [ H.onClick Clear
+            , CSS.style_ [ CSS.padding "0.5rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                         , CSS.backgroundColor (CSS.hex "334155"), CSS.color (CSS.hex "94a3b8")
+                         , CSS.cursor "pointer" ] ]
+            [ text "Clear" ]
+        ]
+    , H.div_
+        [ CSS.style_ [ CSS.backgroundColor (CSS.hex "0f172a"), CSS.borderRadius "10px"
+                     , CSS.padding "1rem", CSS.fontFamily "ui-monospace,monospace"
+                     , CSS.color (CSS.hex "22c55e"), CSS.fontSize "0.82rem"
+                     , CSS.minHeight "6rem" ] ]
+        (if null (_pings m)
+          then [ text "Timestamps appear here after each Ping." ]
+          else map (\\t -> H.p_ [ CSS.style_ [ CSS.margin "0.2rem 0" ] ]
+                       [ text ("pong @ " <> ms (round t :: Int) <> " ms") ])
+                   (_pings m))
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson27 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 27: Component Mailbox — mail / mailParent / checkMail
+--
+-- Every Component has an async 'mailbox' slot that receives JSON-encoded
+-- messages from other components. Miso dispatches the decoded value as
+-- a normal action through the update function.
+--
+-- Key API (all re-exported from Miso):
+--
+--   checkMail
+--     :: FromJSON value
+--     => (value -> action)       -- success
+--     -> (MisoString -> action)  -- decode error
+--     -> Value -> Maybe action
+--
+--   mailParent :: ToJSON message => message -> Effect parent props model action
+--   -- sends to direct parent's mailbox
+--
+--   mailChildren    :: ToJSON message => message -> Effect parent props model action
+--   mailAncestors   :: ToJSON message => message -> Effect parent props model action
+--   mailDescendants :: ToJSON message => message -> Effect parent props model action
+--   broadcast       :: (Eq model, ToJSON message) => message -> Effect parent props model action
+--   -- broadcasts to every OTHER mounted component
+--
+--   mail :: ToJSON message => ComponentId -> message -> IO ()
+--   -- sends to a specific component by ID (obtained via 'ask' in Effect)
+--
+-- Wire up the mailbox field when constructing the App/Component:
+--   app { mailbox = checkMail ReceivedMsg MailError }
+--
+-- This lesson: parent mounts a child; child sends a greeting via
+-- mailParent; parent displays received messages.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+-- ── Parent ──────────────────────────────────────────────────────────────
+data ParentAction
+  = GotMail MisoString   -- received from child's mailParent
+  | MailError MisoString -- decode error
+
+data ParentModel = ParentModel
+  { _inbox :: [MisoString] }
+  deriving Eq
+
+main :: IO ()
+main = startApp defaultEvents myApp { mountPoint = Just "app" }
+
+myApp :: App ParentModel ParentAction
+myApp = (vcomp (ParentModel []) parentUpdate parentView)
+  { mailbox = checkMail GotMail MailError }
+
+parentUpdate :: ParentAction -> Effect parent props ParentModel ParentAction
+parentUpdate = \\case
+  GotMail msg  -> modify (\\m -> m { _inbox = msg : take 4 (_inbox m) })
+  MailError e  -> modify (\\m -> m { _inbox = ("decode error: " <> e) : _inbox m })
+
+parentView :: props -> ParentModel -> View ParentModel ParentAction
+parentView _ m =
+  H.div_
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "28rem", CSS.margin "auto" ] ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem", CSS.margin "0 0 1rem 0" ] ]
+        [ text "Lesson 27: mailbox — parent receives from child" ]
+
+    -- Mount the child component
+    , H.div_
+        [ CSS.style_ [ CSS.border "2px solid #6366f1", CSS.borderRadius "10px"
+                     , CSS.padding "1rem", CSS.marginBottom "1rem" ] ]
+        [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.75rem", CSS.margin "0 0 0.5rem 0" ] ]
+            [ text "Child component:" ]
+        , component_ childComp
+        ]
+
+    -- Parent inbox
+    , H.div_
+        [ CSS.style_ [ CSS.backgroundColor (CSS.hex "0f172a"), CSS.borderRadius "10px"
+                     , CSS.padding "1rem", CSS.fontFamily "ui-monospace,monospace"
+                     , CSS.color (CSS.hex "22c55e"), CSS.fontSize "0.82rem"
+                     , CSS.minHeight "4rem" ] ]
+        (if null (_inbox m)
+          then [ text "Parent inbox is empty — press Send in the child." ]
+          else map (\\msg -> H.p_ [ CSS.style_ [ CSS.margin "0.2rem 0" ] ] [ text msg ]) (_inbox m))
+    ]
+
+-- ── Child ────────────────────────────────────────────────────────────────
+data ChildAction
+  = SendToParent
+  | Inc
+
+data ChildModel = ChildModel { _clicks :: Int } deriving Eq
+
+childComp :: Component ParentModel () ChildModel ChildAction
+childComp = vcomp (ChildModel 0) childUpdate childView
+
+childUpdate :: ChildAction -> Effect ParentModel () ChildModel ChildAction
+childUpdate = \\case
+  Inc ->
+    modify (\\m -> m { _clicks = _clicks m + 1 })
+  SendToParent -> do
+    n <- _clicks <$> get
+    -- mailParent sends a JSON value to the parent's mailbox field
+    mailParent ("click #" <> ms n <> " from child" :: MisoString)
+
+childView :: () -> ChildModel -> View ChildModel ChildAction
+childView _ m =
+  H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem", CSS.alignItems "center" ] ]
+    [ H.button_
+        [ H.onClick Inc
+        , CSS.style_ [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                     , CSS.backgroundColor (CSS.hex "334155"), CSS.color (CSS.hex "94a3b8")
+                     , CSS.cursor "pointer" ] ]
+        [ text ("Count: " <> ms (_clicks m)) ]
+    , H.button_
+        [ H.onClick SendToParent
+        , CSS.style_ [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                     , CSS.backgroundColor (CSS.hex "6366f1"), CSS.color (CSS.hex "fff")
+                     , CSS.cursor "pointer", CSS.fontWeight "700" ] ]
+        [ text "Send to parent" ]
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson28 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 28: PubSub — subscribe / publish / topic
+--
+-- Miso.PubSub provides fan-out publish/subscribe between unrelated
+-- components. Unlike mailParent / mailChildren, PubSub doesn't require
+-- a parent/child relationship — any component can publish or subscribe
+-- to any named Topic.
+--
+-- Key API (re-exported from Miso):
+--
+--   topic :: MisoString -> Topic a
+--   -- creates a named topic (typically a top-level value)
+--
+--   subscribe
+--     :: FromJSON message
+--     => Topic message
+--     -> (message -> action)       -- success
+--     -> (MisoString -> action)    -- decode error
+--     -> Effect parent props model action
+--
+--   unsubscribe :: Topic message -> Effect parent props model action
+--
+--   publish :: ToJSON message => Topic message -> message -> IO ()
+--   -- IO (), not Effect — call via io_ (publish myTopic msg)
+--
+-- Protocol tip: document the JSON encoding of your Topic's message type
+-- as a public API so consumers can use their own types.
+--
+-- This lesson uses a single component to both publish and subscribe
+-- on the same topic, demonstrating the full round-trip. In a real app
+-- you'd have separate publisher and subscriber components.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+-- The shared topic — a top-level value, accessible by any component.
+-- We use MisoString as the message type here for simplicity.
+counterTopic :: Topic MisoString
+counterTopic = topic "counter"
+----------------------------------------------------------------------------
+data Model = Model
+  { _log        :: [MisoString]
+  , _subscribed :: Bool
+  , _sent       :: Int
+  } deriving Eq
+
+data Action
+  = Subscribe
+  | Unsubscribe
+  | Publish MisoString
+  | Received MisoString
+  | SubError MisoString
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+
+app :: App Model Action
+app = vcomp (Model [] False 0) update view
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  Subscribe ->
+    -- subscribe registers this component as a receiver on the topic
+    subscribe counterTopic Received SubError >>
+    modify (\\m -> m { _log = "subscribed" : _log m, _subscribed = True })
+
+  Unsubscribe ->
+    unsubscribe counterTopic >>
+    modify (\\m -> m { _log = "unsubscribed" : _log m, _subscribed = False })
+
+  Publish msg ->
+    -- publish is IO () — use io_ to run it in Effect
+    io_ (publish counterTopic msg) >>
+    modify (\\m -> m { _sent = _sent m + 1 })
+
+  Received msg ->
+    modify (\\m -> m { _log = ("recv: " <> msg) : take 7 (_log m) })
+
+  SubError e ->
+    modify (\\m -> m { _log = ("error: " <> e) : _log m })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "28rem", CSS.margin "auto" ] ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem", CSS.margin "0 0 1rem 0" ] ]
+        [ text "Lesson 28: PubSub — subscribe / publish / topic" ]
+
+    -- Subscribe/unsubscribe controls
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem", CSS.marginBottom "1rem" ] ]
+        [ H.button_
+            [ H.onClick Subscribe
+            , CSS.style_ [ CSS.padding "0.45rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                         , CSS.backgroundColor (if _subscribed m then CSS.hex "1e293b" else CSS.hex "22c55e")
+                         , CSS.color (CSS.hex "fff"), CSS.cursor "pointer", CSS.fontWeight "700" ] ]
+            [ text (if _subscribed m then "Subscribed ✓" else "Subscribe") ]
+        , H.button_
+            [ H.onClick Unsubscribe
+            , CSS.style_ [ CSS.padding "0.45rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                         , CSS.backgroundColor (CSS.hex "334155"), CSS.color (CSS.hex "94a3b8")
+                         , CSS.cursor "pointer" ] ]
+            [ text "Unsubscribe" ]
+        ]
+
+    -- Publish controls
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem", CSS.marginBottom "1rem" ] ]
+        [ pubBtn "increment"  "6366f1"
+        , pubBtn "decrement"  "f59e0b"
+        , pubBtn "reset"      "ef4444"
+        ]
+    , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.78rem", CSS.margin "0 0 0.5rem 0" ] ]
+        [ text ("Published: " <> ms (_sent m) <> " message(s). Subscribe first to see received messages.") ]
+
+    -- Log
+    , H.div_
+        [ CSS.style_ [ CSS.backgroundColor (CSS.hex "0f172a"), CSS.borderRadius "10px"
+                     , CSS.padding "1rem", CSS.fontFamily "ui-monospace,monospace"
+                     , CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.82rem"
+                     , CSS.minHeight "5rem" ] ]
+        (if null (_log m)
+          then [ text "Subscribe, then publish to see messages here." ]
+          else map (\\l -> H.p_ [ CSS.style_ [ CSS.margin "0.2rem 0" ] ] [ text l ]) (_log m))
+    ]
+
+pubBtn :: MisoString -> MisoString -> View Model Action
+pubBtn msg col =
+  H.button_
+    [ H.onClick (Publish msg)
+    , CSS.style_ [ CSS.padding "0.45rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                 , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+                 , CSS.cursor "pointer", CSS.fontWeight "600" ] ]
+    [ text msg ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson29 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 29: Window Subscriptions — onLineSub / windowSub / windowCoordsSub
+--
+-- Miso.Subscription.Window (and OnLine) provide Subs that listen at the
+-- window level — outside of miso's event delegation, directly via
+-- window.addEventListener.
+--
+-- All re-exported from Miso via Miso.Subscription.
+--
+-- onLineSub :: (Bool -> action) -> Sub action
+--   Fires True when the browser goes online, False when offline.
+--   Wraps the navigator.onLine API / "online"/"offline" window events.
+--
+-- windowCoordsSub :: ((Double, Double) -> action) -> Sub action
+--   Delivers (clientX, clientY) on every pointermove at window level.
+--   Alias for: windowSub "pointermove" pointerDecoder (action . client)
+--
+-- windowSub
+--   :: MisoString      -- event name (any window-level event)
+--   -> Decoder r       -- how to decode the event object
+--   -> (r -> action)   -- action constructor
+--   -> Sub action
+--   Listen to any window event with a custom Decoder.
+--
+-- windowSubWithOptions
+--   :: Options -> MisoString -> Decoder r -> (r -> action) -> Sub action
+--   Like windowSub but with preventDefault / stopPropagation options.
+--
+-- These subs are registered in the 'subs' field of App/Component.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+type Coord = (Double, Double)
+
+data Model = Model
+  { _online :: Bool
+  , _mouse  :: Coord
+  , _clicks :: Int
+  } deriving Eq
+
+data Action
+  = NetworkChange Bool        -- from onLineSub
+  | MouseMoved    Coord       -- from windowCoordsSub
+  | WindowClicked             -- from windowSub "click"
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp (defaultEvents <> mouseEvents) app { mountPoint = Just "app" }
+
+app :: App Model Action
+app = (vcomp (Model True (0,0) 0) update view)
+  { subs =
+      [ -- fires True/False when browser goes online/offline
+        onLineSub NetworkChange
+        -- fires on every pointermove at the window level
+      , windowCoordsSub MouseMoved
+        -- windowSub lets you listen to any window event by name
+      , windowSub "click" emptyDecoder (const WindowClicked)
+      ]
+  }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  NetworkChange online -> modify (\\m -> m { _online = online })
+  MouseMoved    coord  -> modify (\\m -> m { _mouse  = coord })
+  WindowClicked        -> modify (\\m -> m { _clicks = _clicks m + 1 })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "28rem", CSS.margin "auto" ] ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem", CSS.margin "0 0 1.5rem 0" ] ]
+        [ text "Lesson 29: Window Subs — onLineSub / windowCoordsSub / windowSub" ]
+
+    , statRow "Network"
+        (if _online m then CSS.hex "22c55e" else CSS.hex "ef4444")
+        (if _online m then "Online" else "Offline (disconnect to test)")
+
+    , statRow "Mouse (clientX, clientY)"
+        (CSS.hex "6366f1")
+        (let (x,y) = _mouse m
+         in ms (round x :: Int) <> ", " <> ms (round y :: Int))
+
+    , statRow "Window clicks"
+        (CSS.hex "f59e0b")
+        (ms (_clicks m) <> " click(s) anywhere on window")
+
+    , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "475569"), CSS.fontSize "0.8rem"
+                         , CSS.marginTop "1.5rem", CSS.fontFamily "ui-monospace,monospace" ] ]
+        [ text "Move the mouse or click anywhere to see the subs fire." ]
+    ]
+
+statRow :: MisoString -> MisoString -> MisoString -> View model action
+statRow label colour val =
+  H.div_
+    [ CSS.style_ [ CSS.display "flex", CSS.justifyContent "space-between"
+                 , CSS.alignItems "center", CSS.padding "0.6rem 0.8rem"
+                 , CSS.borderRadius "8px", CSS.backgroundColor (CSS.hex "0f172a")
+                 , CSS.marginBottom "0.6rem" ] ]
+    [ H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.8rem" ] ] [ text label ]
+    , H.span_ [ CSS.style_ [ CSS.color colour, CSS.fontFamily "ui-monospace,monospace"
+                            , CSS.fontSize "0.82rem", CSS.fontWeight "700" ] ] [ text val ]
+    ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson30 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
+----------------------------------------------------------------------------
+-- Lesson 30: Debugging — logLevel / DebugAll / DebugEvents / DebugHydrate
+--
+-- Miso has a built-in diagnostic system controlled by the 'logLevel' field
+-- on App / Component. All warnings appear in the browser DevTools console.
+--
+-- data LogLevel
+--   = Off            -- no debug output (default, set by 'vcomp'/'component')
+--   | DebugHydrate   -- warns if the real DOM differs from the virtual DOM
+--                    -- during prerendering / SSR hydration
+--   | DebugEvents    -- warns when an event cannot be routed to its handler
+--                    -- (e.g. you forgot to add a custom event to the Events map)
+--   | DebugAll       -- enables all of the above
+--
+-- Usage:  app { logLevel = DebugAll }
+--
+-- ── Common mistakes DebugEvents catches ──────────────────────────────────
+-- 1. Using  on "my-event" ...  but "my-event" is not in the Events map.
+--    Fix:  startApp (defaultEvents <> M.fromList [("my-event", BUBBLE)]) ...
+--
+-- 2. An event handler is wired to a VNode that is no longer in the VDOM
+--    when the event fires (e.g. stale reference after an update).
+--
+-- ── Common mistakes DebugHydrate catches ─────────────────────────────────
+-- 1. Server-rendered HTML that doesn't match the initial virtual DOM
+--    (e.g. different class names, missing attributes, wrong text).
+--
+-- ── How to use this lesson ───────────────────────────────────────────────
+-- This app deliberately registers a handler for "custom-event" but does NOT
+-- add it to the Events map.  Open DevTools Console, click the button, and
+-- watch DebugEvents log the routing failure.  Then change logLevel to Off
+-- to suppress the warning, or fix it by adding the event to the map.
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import qualified Data.Map.Strict as M
+----------------------------------------------------------------------------
+import Miso
+import Miso.Event (on, Phase(..))
+import Miso.Event.Decoder (emptyDecoder)
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+data Model = Model
+  { _log      :: [MisoString]
+  , _logLevel :: LogLevel
+  } deriving Eq
+
+data Action
+  = CustomClick           -- handled in Haskell, but event not in Events map
+  | NormalClick           -- handled normally via onClick
+  | SetLogLevel LogLevel
+  | ClearLog
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents myApp { mountPoint = Just "app" }
+
+-- DebugAll is set here — change to Off to silence warnings
+myApp :: App Model Action
+myApp = (vcomp (Model [] DebugAll) update view)
+  { logLevel = DebugAll }
+----------------------------------------------------------------------------
+update :: Action -> Effect parent props Model Action
+update = \\case
+  CustomClick ->
+    modify (\\m -> m { _log = "CustomClick fired (check console for routing warning)" : take 6 (_log m) })
+  NormalClick ->
+    modify (\\m -> m { _log = "NormalClick fired (onClick — in defaultEvents)" : take 6 (_log m) })
+  SetLogLevel ll ->
+    modify (\\m -> m { _logLevel = ll, _log = ("logLevel = " <> ms (show ll)) : _log m })
+  ClearLog ->
+    modify (\\m -> m { _log = [] })
+----------------------------------------------------------------------------
+view :: props -> Model -> View Model Action
+view _ m =
+  H.div_
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "30rem", CSS.margin "auto" ] ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem", CSS.margin "0 0 1rem 0" ] ]
+        [ text "Lesson 30: Debugging — logLevel" ]
+
+    -- LogLevel picker
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.5rem", CSS.flexWrap "wrap"
+                           , CSS.marginBottom "1rem" ] ]
+        [ llBtn Off          "Off"
+        , llBtn DebugHydrate "DebugHydrate"
+        , llBtn DebugEvents  "DebugEvents"
+        , llBtn DebugAll     "DebugAll"
+        ]
+
+    , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.78rem", CSS.margin "0 0 0.75rem 0" ] ]
+        [ text ("Current: logLevel = " <> ms (show (_logLevel m))) ]
+
+    -- Test buttons
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem", CSS.marginBottom "1rem" ] ]
+        [ H.button_
+            [ -- onClick is in defaultEvents — routes fine
+              H.onClick NormalClick
+            , CSS.style_ [ CSS.padding "0.45rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                         , CSS.backgroundColor (CSS.hex "22c55e"), CSS.color (CSS.hex "fff")
+                         , CSS.cursor "pointer", CSS.fontWeight "700" ] ]
+            [ text "Normal click (OK)" ]
+
+        , H.button_
+            [ -- "custom-event" is NOT in defaultEvents — DebugEvents will warn
+              on "custom-event" emptyDecoder (\\_ _ -> CustomClick)
+            , H.onClick CustomClick
+            , CSS.style_ [ CSS.padding "0.45rem 1rem", CSS.border "none", CSS.borderRadius "8px"
+                         , CSS.backgroundColor (CSS.hex "f59e0b"), CSS.color (CSS.hex "fff")
+                         , CSS.cursor "pointer", CSS.fontWeight "700" ] ]
+            [ text "Trigger custom-event (check console)" ]
+        ]
+
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.justifyContent "space-between"
+                           , CSS.alignItems "center", CSS.marginBottom "0.4rem" ] ]
+        [ H.span_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.78rem" ] ]
+            [ text "Event log" ]
+        , H.button_ [ H.onClick ClearLog
+                    , CSS.style_ [ CSS.border "none", CSS.background "none"
+                                 , CSS.color (CSS.hex "6b7280"), CSS.cursor "pointer"
+                                 , CSS.fontSize "0.78rem" ] ]
+            [ text "clear" ]
+        ]
+
+    , H.div_
+        [ CSS.style_ [ CSS.backgroundColor (CSS.hex "0f172a"), CSS.borderRadius "10px"
+                     , CSS.padding "1rem", CSS.fontFamily "ui-monospace,monospace"
+                     , CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.8rem"
+                     , CSS.minHeight "5rem" ] ]
+        (if null (_log m)
+          then [ text "Click the buttons above. Open DevTools console to see debug output." ]
+          else map (\\l -> H.p_ [ CSS.style_ [ CSS.margin "0.2rem 0" ] ] [ text l ]) (_log m))
+    ]
+
+llBtn :: LogLevel -> MisoString -> View Model Action
+llBtn ll label =
+  H.button_
+    [ H.onClick (SetLogLevel ll)
+    , CSS.style_ [ CSS.padding "0.35rem 0.8rem", CSS.border "none", CSS.borderRadius "6px"
+                 , CSS.backgroundColor (CSS.hex "1e293b"), CSS.color (CSS.hex "94a3b8")
+                 , CSS.cursor "pointer", CSS.fontSize "0.78rem" ] ]
+    [ text label ]
+----------------------------------------------------------------------------
+`;
+
+      const lesson31 = `----------------------------------------------------------------------------
+{-# LANGUAGE OverloadedStrings #-}
+----------------------------------------------------------------------------
+-- Lesson 04: VNode / VText — the View type
+--
+-- Every miso view function returns  View model action, which is a
+-- Haskell value representing the virtual DOM.  There are four constructors:
+--
+--   data View model action
+--     = VNode Namespace Tag [Attribute action] [View model action]
+--     | VText (Maybe Key) MisoString
+--     | VComp (Maybe Key) (SomeComponent model)
+--     | VFrag (Maybe Key) [View model action]    -- see lesson 05 (VFrag)
+--
+-- ── Constructing nodes ────────────────────────────────────────────────────
+--
+--   node :: Namespace -> Tag -> [Attribute action] -> [View model action]
+--        -> View model action
+--   node = VNode          -- the primitive; all smart constructors wrap this
+--
+--   nodeHtml :: Tag -> [Attribute action] -> [View model action] -> View model action
+--   nodeHtml tag = node HTML tag     -- shorthand for HTML namespace
+--
+--   div_ attrs children = nodeHtml "div" attrs children
+--   p_   attrs children = nodeHtml "p"   attrs children
+--   -- ... every HTML element smart constructor is just 'nodeHtml "<tag>"'
+--
+-- ── Text nodes ────────────────────────────────────────────────────────────
+--
+--   text    :: MisoString -> View model action   -- creates VText; HTML-safe
+--   textRaw :: MisoString -> View model action   -- same but skips escaping on SSR
+--   vtext   = text  -- synonym
+--
+-- ── Namespace ─────────────────────────────────────────────────────────────
+--
+--   data Namespace = HTML | SVG
+--   node HTML "div" [] []   -- an HTML element
+--   node SVG  "circle" [] [] -- an SVG element (see Miso.Svg for smart constructors)
+--
+-- ── Custom elements ───────────────────────────────────────────────────────
+--   node HTML "my-widget" [prop "data-theme" ("dark" :: MisoString)] []
+--   -- 'node' lets you use any tag name, including Web Components
+--
+-- ── The 'ms' helper ──────────────────────────────────────────────────────
+--   ms :: Show a => a -> MisoString   -- converts Int, Double, Bool, etc. to text
+----------------------------------------------------------------------------
+module Main where
+----------------------------------------------------------------------------
+import Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
+----------------------------------------------------------------------------
+main :: IO ()
+main = startApp defaultEvents app { mountPoint = Just "app" }
+
+app :: App () ()
+app = vcomp () (\\_ -> pure ()) view
+----------------------------------------------------------------------------
+view :: props -> () -> View () ()
+view _ _ =
+  -- node HTML "div" is exactly what div_ [] [] desugars to
+  node HTML "div"
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "36rem", CSS.margin "auto" ] ]
+
+    [ -- ── VText: text and textRaw ────────────────────────────────────────
+      section "VText — text / textRaw"
+
+      -- text creates a VText node; it's HTML-safe (escapes < > & on SSR)
+    , node HTML "p" [ CSS.style_ [ CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.9rem" ] ]
+        [ text "Hello from text. Special chars like <b> are safe." ]
+
+      -- textRaw skips escaping; only differs from text in prerender/SSR mode
+    , node HTML "p" [ CSS.style_ [ CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.9rem" ] ]
+        [ textRaw "textRaw: same in the browser, skips escaping on the server." ]
+
+      -- ── VNode: node directly vs smart constructor ──────────────────────
+    , section "VNode — node HTML == div_"
+
+      -- These two are identical:
+      --   div_ [style ...] [text "A"]
+      --   node HTML "div" [style ...] [text "A"]
+    , H.div_
+        [ CSS.style_ [ CSS.display "flex", CSS.gap "1rem", CSS.marginTop "0.25rem" ] ]
+        [ box "div_ [] [text ...]"       (CSS.hex "6366f1")
+        , box "node HTML \"div\" [] [...]" (CSS.hex "6366f1")
+        ]
+
+      -- ── Namespace: HTML vs SVG ─────────────────────────────────────────
+    , section "Namespace — HTML vs SVG"
+    , H.div_
+        [ CSS.style_ [ CSS.display "flex", CSS.gap "1rem", CSS.alignItems "center" ] ]
+        [ -- node SVG creates elements in the SVG namespace
+          node SVG "svg"
+            [ prop "width" ("80" :: MisoString)
+            , prop "height" ("80" :: MisoString)
+            , CSS.style_ [ CSS.border "1px solid #334155" ]
+            ]
+            [ node SVG "circle"
+                [ prop "cx" ("40" :: MisoString)
+                , prop "cy" ("40" :: MisoString)
+                , prop "r"  ("30" :: MisoString)
+                , prop "fill" ("#6366f1" :: MisoString)
+                ]
+                []
+            ]
+        , H.div_ [ CSS.style_ [ CSS.fontFamily "ui-monospace,monospace", CSS.fontSize "0.78rem"
+                               , CSS.color (CSS.hex "94a3b8") ] ]
+            [ text "node SVG \"svg\" [] [ node SVG \"circle\" [...] [] ]" ]
+        ]
+
+      -- ── Custom / unknown elements ──────────────────────────────────────
+    , section "Custom elements — any tag name"
+    , node HTML "details"
+        [ CSS.style_ [ CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.85rem" ] ]
+        [ node HTML "summary" [] [ text "node HTML \"details\" and \"summary\"" ]
+        , H.p_ [] [ text ("Any HTML tag works — even Web Components like ")
+                  , node HTML "code" [] [ text "<my-widget>" ]
+                  ]
+        ]
+
+      -- ── ms: Show → MisoString ─────────────────────────────────────────
+    , section "ms — Show → MisoString"
+    , H.div_
+        [ CSS.style_ [ CSS.fontFamily "ui-monospace,monospace", CSS.fontSize "0.85rem"
+                     , CSS.color (CSS.hex "22c55e") ] ]
+        [ text ("ms 42 = \"" <> ms (42 :: Int) <> "\"  |  ")
+        , text ("ms True = \"" <> ms True <> "\"  |  ")
+        , text ("ms 3.14 = \"" <> ms (3.14 :: Double) <> "\"")
+        ]
+    ]
+
+-- ── helpers ───────────────────────────────────────────────────────────────
+
+section :: MisoString -> View model action
+section t =
+  H.p_
+    [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.75rem", CSS.fontWeight "700"
+                 , CSS.letterSpacing "0.07em", CSS.margin "1.25rem 0 0.4rem 0" ] ]
+    [ text t ]
+
+box :: MisoString -> MisoString -> View model action
+box label colour =
+  H.div_
+    [ CSS.style_ [ CSS.padding "0.6rem 1rem", CSS.borderRadius "8px"
+                 , CSS.backgroundColor colour, CSS.color (CSS.hex "fff")
+                 , CSS.fontFamily "ui-monospace,monospace", CSS.fontSize "0.78rem" ] ]
+    [ text label ]
+----------------------------------------------------------------------------
+`;
+
+      const lessons = {
+        lesson01, lesson02, lesson03, lesson04, lesson05,
+        lesson31,
+        lesson06, lesson07, lesson08, lesson09, lesson10,
+        lesson11, lesson12, lesson13, lesson14, lesson15,
+        lesson16, lesson17, lesson18, lesson19, lesson20,
+        lesson21, lesson22, lesson23, lesson24,
+        lesson25, lesson26, lesson27, lesson28, lesson29, lesson30,
+      };
+
       const hash = window.location.hash.slice(1);
       let initialSource = helloExample;
       if (hash) {
@@ -1723,6 +4752,16 @@ restartBtn =
         const ex = examples[examplePicker.value];
         if (ex) {
           window.editor.setValue(ex);
+          document.getElementById('runBtn').click();
+        }
+      });
+
+      // Lesson picker
+      const lessonPicker = document.getElementById('lessonPicker');
+      lessonPicker.addEventListener('change', () => {
+        const ls = lessons[lessonPicker.value];
+        if (ls) {
+          window.editor.setValue(ls);
           document.getElementById('runBtn').click();
         }
       });
@@ -2065,6 +5104,51 @@ restartBtn =
               <option value="hello">Hello World</option>
               <option value="input">Live Input</option>
               <option value="tetris">Tetris</option>
+            </select>
+            <select id="lessonPicker" class="editor-ctrl-select" aria-label="Load lesson" style="max-width:12rem">
+              <option value="" selected disabled>Lessons…</option>
+              <!-- Foundation -->
+              <option value="lesson01">01: Hello World</option>
+              <option value="lesson02">02: Counter (MVU)</option>
+              <option value="lesson03">03: Events — onInput / onClick</option>
+              <option value="lesson31">04: VNode / VText — the View type</option>
+              <!-- HTML & CSS -->
+              <option value="lesson10">05: CSS Styles DSL</option>
+              <option value="lesson13">06: Fragments (VFrag)</option>
+              <option value="lesson14">07: Keyed Lists</option>
+              <!-- Data & Effects -->
+              <option value="lesson18">08: Effect — io / io_ / sync</option>
+              <option value="lesson19">09: JSON encode / decode</option>
+              <option value="lesson25">10: Fetch API — getJSON / Response</option>
+              <option value="lesson09">11: Local Storage</option>
+              <!-- State -->
+              <option value="lesson04">12: Lens State operators</option>
+              <!-- Subscriptions -->
+              <option value="lesson05">13: Sub: Timer</option>
+              <option value="lesson06">14: Sub: Keyboard</option>
+              <option value="lesson07">15: Sub: Mouse</option>
+              <option value="lesson29">16: Window Subs — onLineSub / windowCoordsSub</option>
+              <option value="lesson08">17: Sub: startSub / stopSub</option>
+              <option value="lesson21">18: rAFSub (requestAnimationFrame)</option>
+              <!-- Event system -->
+              <option value="lesson24">19: Events — bubble, capture, delegation, Decoder</option>
+              <!-- Components -->
+              <option value="lesson15">20: Lifecycle Hooks</option>
+              <option value="lesson16">21: Nested Components</option>
+              <option value="lesson17">22: Props</option>
+              <option value="lesson27">23: Mailbox — mail / mailParent / checkMail</option>
+              <option value="lesson28">24: PubSub — subscribe / publish / topic</option>
+              <!-- Routing -->
+              <option value="lesson20">25: Router</option>
+              <!-- Graphics -->
+              <option value="lesson11">26: SVG</option>
+              <option value="lesson12">27: Canvas 2D</option>
+              <!-- FFI / JS Interop -->
+              <option value="lesson26">28: withSink — direct Sink access</option>
+              <option value="lesson22">29: Miso.DSL — JS interop</option>
+              <option value="lesson23">30: FFI.QQ — inline JavaScript</option>
+              <!-- Debugging -->
+              <option value="lesson30">31: Debugging — logLevel / DebugAll</option>
             </select>
             <div style="display:flex;align-items:center;gap:0.35rem;">
               <div class="font-controls">
