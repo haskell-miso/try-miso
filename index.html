@@ -106,6 +106,7 @@
         border-radius: 3px;
         margin: 3px 0;
         transition: background 0.15s;
+        touch-action: none;
       }
       .row-splitter:hover, .row-splitter.active { background: #374151; }
       .pane {
@@ -1841,51 +1842,77 @@ toUpper = ms . map (\\c -> if c >= 'a' && c <= 'z' then toEnum (fromEnum c - 32)
       const lesson04 = `----------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE TypeApplications  #-}
 ----------------------------------------------------------------------------
--- Lesson 04: Lens State — Miso.Lens operators
+-- Lesson 12: Lens State — Miso.Lens operators + Miso.Lens.Generic
+--
 -- Miso.Lens is a lightweight lens library bundled with miso.
--- Lenses can be written by hand using 'lens getter setter'.
--- Inside Effect (which is MonadState), these operators are available:
---   (+=), (-=), (*=)  — numeric mutation
---   (.=)              — set a field
---   (%=)              — modify a field with a function
---   (^.)              — infix read (r ^. l)
--- 'this' is the identity lens when the model IS the field.
+--
+-- ── Operators (inside Effect / MonadState) ────────────────────────────────
+--   l += n   — increment field by n
+--   l -= n   — decrement field by n
+--   l *= n   — multiply field by n
+--   l .= v   — set field to v
+--   l %= f   — apply function f to field
+--   m ^. l   — read field from model m
+--   this     — identity lens (when model IS the value)
+--
+-- ── Approach A: hand-written lens ────────────────────────────────────────
+--   myLens = lens getter (\\s v -> s { field = v })
+--
+-- ── Approach B: Miso.Lens.Generic (no Template Haskell) ─────────────────
+--   data Model = Model { count :: Int, active :: Bool }
+--     deriving (Generic)              -- GHC.Generics
+--
+--   import Miso.Lens.Generic (field)  -- brings the IsLabel instance into scope
+--
+--   field @"count"  :: Lens Model Int   -- explicit TypeApplications style
+--   #count          :: Lens Model Int   -- OverloadedLabels style (same thing)
+--
+--   Both styles work with all Miso.Lens operators:
+--     #count += 1
+--     m ^. #count
+--
+-- The demo below uses Approach B.  The commented section shows Approach A.
 ----------------------------------------------------------------------------
 module Main where
 ----------------------------------------------------------------------------
+import GHC.Generics (Generic)
+----------------------------------------------------------------------------
 import           Miso
 import           Miso.Lens
+import           Miso.Lens.Generic (field)   -- IsLabel instance + 'field'
 import qualified Miso.Html as H
 import qualified Miso.CSS  as CSS
 ----------------------------------------------------------------------------
 data Model = Model
-  { _counter :: Int
-  , _active  :: Bool
-  } deriving (Eq)
+  { count  :: Int
+  , active :: Bool
+  } deriving (Eq, Generic)           -- Generic is all that's needed
 
-counter :: Lens Model Int
-counter = lens _counter (\\m c -> m { _counter = c })
-
-active :: Lens Model Bool
-active = lens _active (\\m b -> m { _active = b })
+-- Approach A (hand-written) — equivalent to #count / #active:
+-- countL :: Lens Model Int
+-- countL = lens count (\\m v -> m { count = v })
+-- activeL :: Lens Model Bool
+-- activeL = lens active (\\m v -> m { active = v })
 ----------------------------------------------------------------------------
-data Action = Inc | Dec | Double | Reset | Toggle
-  deriving (Eq, Show)
+data Action = Inc | Dec | Double | Reset | Toggle deriving (Eq, Show)
 ----------------------------------------------------------------------------
 main :: IO ()
 main = startApp defaultEvents app { mountPoint = Just "app" }
-----------------------------------------------------------------------------
+
 app :: App Model Action
 app = vcomp (Model 0 True) update view
 ----------------------------------------------------------------------------
 update :: Action -> Effect parent props Model Action
 update = \\case
-  Inc    -> counter += 1      -- (+=) increments
-  Dec    -> counter -= 1      -- (-=) decrements
-  Double -> counter *= 2      -- (*=) multiplies
-  Reset  -> counter .= 0      -- (.=) sets to a value
-  Toggle -> active  %= not    -- (%=) applies a function
+  Inc    -> #count  += 1         -- OverloadedLabels lens
+  Dec    -> #count  -= 1
+  Double -> #count  *= 2
+  Reset  -> field @"count" .= 0  -- TypeApplications style (same lens)
+  Toggle -> #active %= not
 ----------------------------------------------------------------------------
 view :: props -> Model -> View Model Action
 view _ m =
@@ -1899,22 +1926,26 @@ view _ m =
     [ H.span_
         [ CSS.style_
             [ CSS.fontSize "5rem", CSS.fontWeight "700"
-            , CSS.color (CSS.hex (if m ^. active then "22c55e" else "6b7280"))
+            , CSS.color (CSS.hex (if m ^. #active then "22c55e" else "6b7280"))
             ]
         ]
-        [ text (ms (m ^. counter)) ]
-    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.5rem", CSS.flexWrap "wrap", CSS.justifyContent "center" ] ]
+        [ text (ms (m ^. #count)) ]
+    , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.8rem"
+                         , CSS.fontFamily "ui-monospace,monospace", CSS.margin "0" ] ]
+        [ text ("Using: #count, #active  (Miso.Lens.Generic + OverloadedLabels)") ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.5rem", CSS.flexWrap "wrap"
+                           , CSS.justifyContent "center" ] ]
         (map (\\(a,l) -> H.button_ [ H.onClick a, CSS.style_ btnStyle ] [ text l ])
           [ (Inc, "+1"), (Dec, "-1"), (Double, "×2"), (Reset, "reset") ])
     , H.button_
         [ H.onClick Toggle
         , CSS.style_
             [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
-            , CSS.backgroundColor (CSS.hex (if m ^. active then "22c55e" else "374151"))
+            , CSS.backgroundColor (CSS.hex (if m ^. #active then "22c55e" else "374151"))
             , CSS.color (CSS.hex "fff"), CSS.cursor "pointer"
             ]
         ]
-        [ text (if m ^. active then "active" else "inactive") ]
+        [ text (if m ^. #active then "active" else "inactive") ]
     ]
 
 btnStyle :: [CSS.Style]
@@ -2935,52 +2966,48 @@ parentView _ _ =
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase        #-}
 ----------------------------------------------------------------------------
--- Lesson 17: Props — parent-to-child data
--- Props let a parent pass read-only data to a child Component.
--- mountWithProps_ mounts a child with a props value.
--- The child reads props in its view (first argument) and via getProps in update.
--- Props are read-only from the child's perspective.
+-- Lesson 22: Props + onPropsChanged
+--
+-- Props let a parent pass read-only data down to a child Component.
+--
+-- ── Passing props ─────────────────────────────────────────────────────────
+--   mountWithProps_ key props comp  — mount comp with typed props, keyed
+--   key +> comp                     — mount with key, no extra props
+--   component_  comp                — unkeyed mount (no props)
+--
+--   The child reads props as the first argument of its view function:
+--     childView :: Theme -> ChildModel -> View ChildModel ChildAction
+--
+-- ── onPropsChanged ────────────────────────────────────────────────────────
+--   onPropsChanged :: Maybe (props -> props -> action)
+--
+--   Field on Component / App. Fires whenever the parent re-renders and
+--   sends new props to the child. Receives (oldProps, newProps).
+--   Use it to react to external config changes without polling.
+--
+--   child = (vcomp initModel update view)
+--     { onPropsChanged = Just ThemeChanged }
+--
+--   update (ThemeChanged old new) = modify (\\m -> ...)
+--
+-- ── parent function ───────────────────────────────────────────────────────
+--   parent :: (parent -> action) -> action -> Effect parent props model action
+--
+--   Lets a child read its parent's current model on demand.
+--   First arg: success callback (parent model -> child action)
+--   Second arg: fallback action if no parent (only at ROOT)
+--
+--   update ReadParent = parent GotParentCount GotNoParent
 ----------------------------------------------------------------------------
 module Main where
 ----------------------------------------------------------------------------
-import           Miso
-import           Miso.Lens
-import qualified Miso.Html          as H
-import qualified Miso.Html.Property as P
-import qualified Miso.CSS           as CSS
+import Miso
+import qualified Miso.Html as H
+import qualified Miso.CSS  as CSS
 ----------------------------------------------------------------------------
 -- ── Props type ────────────────────────────────────────────────────────────
 data Theme = Theme { themeAccent :: MisoString, themeName :: MisoString }
   deriving (Eq)
-
--- ── Child component ───────────────────────────────────────────────────────
-data ChildAction = Noop deriving (Eq, Show)
-
-child :: Component ParentModel Theme Int ChildAction
-child = vcomp 0 childUpdate childView
-
-childUpdate :: ChildAction -> Effect ParentModel Theme Int ChildAction
-childUpdate Noop = pure ()
-
-childView :: Theme -> Int -> View Int ChildAction
-childView theme n =
-  H.div_
-    [ CSS.style_
-        [ CSS.padding "1.25rem 2rem", CSS.borderRadius "12px"
-        , CSS.border ("2px solid " <> themeAccent theme)
-        , CSS.backgroundColor (CSS.hex "1e293b")
-        ]
-    ]
-    [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex (themeAccent theme)), CSS.fontWeight "700", CSS.margin "0 0 0.5rem 0" ] ]
-        [ text ("Theme: " <> themeName theme) ]
-    , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "e5e7eb"), CSS.margin "0", CSS.fontSize "0.9rem" ] ]
-        [ text "I read my accent color from props." ]
-    ]
-
--- ── Parent component ─────────────────────────────────────────────────────
-data ParentAction = Switch deriving (Eq, Show)
-
-data ParentModel = ParentModel { _themeIdx :: Int } deriving (Eq)
 
 themes :: [Theme]
 themes =
@@ -2990,6 +3017,70 @@ themes =
   , Theme "ef4444" "Red"
   ]
 
+-- ── Child component ───────────────────────────────────────────────────────
+data ChildAction
+  = ThemeChanged Theme Theme  -- onPropsChanged: (oldProps, newProps)
+  | ReadParent                -- parent: read parent's ThemeIdx
+  | GotParentIdx Int          -- result of parent read
+  | GotNoParent               -- fallback (only if no parent exists)
+
+data ChildModel = ChildModel
+  { _changeLog  :: [MisoString]
+  , _parentIdx  :: Maybe Int
+  } deriving Eq
+
+child :: Component ParentModel Theme ChildModel ChildAction
+child = (vcomp (ChildModel [] Nothing) childUpdate childView)
+  { onPropsChanged = Just ThemeChanged }   -- fires on every props update
+
+childUpdate :: ChildAction -> Effect ParentModel Theme ChildModel ChildAction
+childUpdate = \\case
+  ThemeChanged old new ->
+    modify (\\m -> m { _changeLog =
+        (themeName old <> " → " <> themeName new) : take 4 (_changeLog m) })
+
+  ReadParent ->
+    -- parent reads the *parent component's* current model
+    parent GotParentIdx GotNoParent
+
+  GotParentIdx n ->
+    modify (\\m -> m { _parentIdx = Just n })
+
+  GotNoParent ->
+    modify (\\m -> m { _parentIdx = Nothing })
+
+childView :: Theme -> ChildModel -> View ChildModel ChildAction
+childView theme m =
+  H.div_
+    [ CSS.style_ [ CSS.padding "1rem", CSS.borderRadius "10px"
+                 , CSS.border ("2px solid #" <> themeAccent theme)
+                 , CSS.backgroundColor (CSS.hex "0f172a") ] ]
+    [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex (themeAccent theme))
+                         , CSS.fontWeight "700", CSS.margin "0 0 0.5rem 0" ] ]
+        [ text ("Props: " <> themeName theme) ]
+    , H.button_
+        [ H.onClick ReadParent
+        , CSS.style_ [ CSS.padding "0.3rem 0.8rem", CSS.border "none"
+                     , CSS.borderRadius "6px", CSS.cursor "pointer"
+                     , CSS.backgroundColor (CSS.hex "1e293b")
+                     , CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.8rem"
+                     , CSS.marginBottom "0.5rem" ] ]
+        [ text ("parent idx: " <> maybe "?" ms (_parentIdx m)) ]
+    , if null (_changeLog m)
+        then H.p_ [ CSS.style_ [ CSS.color (CSS.hex "475569"), CSS.fontSize "0.78rem"
+                                , CSS.margin "0", CSS.fontFamily "ui-monospace,monospace" ] ]
+               [ text "onPropsChanged log (switch theme to see)" ]
+        else H.div_ [] (map (\\e ->
+               H.p_ [ CSS.style_ [ CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.78rem"
+                                  , CSS.margin "0.15rem 0"
+                                  , CSS.fontFamily "ui-monospace,monospace" ] ]
+               [ text e ]) (_changeLog m))
+    ]
+
+-- ── Parent component ─────────────────────────────────────────────────────
+data ParentAction = Switch deriving (Eq, Show)
+data ParentModel  = ParentModel { _themeIdx :: Int } deriving Eq
+
 main :: IO ()
 main = startApp defaultEvents app { mountPoint = Just "app" }
 
@@ -2997,31 +3088,32 @@ app :: App ParentModel ParentAction
 app = vcomp (ParentModel 0) parentUpdate parentView
 
 parentUpdate :: ParentAction -> Effect ROOT () ParentModel ParentAction
-parentUpdate Switch = modify (\\m -> m { _themeIdx = (_themeIdx m + 1) \`mod\` length themes })
+parentUpdate Switch =
+  modify (\\m -> m { _themeIdx = (_themeIdx m + 1) \`mod\` length themes })
 
 parentView :: () -> ParentModel -> View ParentModel ParentAction
 parentView _ m =
   let t = themes !! _themeIdx m
   in H.div_
-       [ CSS.style_
-           [ CSS.display "flex", CSS.flexDirection "column"
-           , CSS.alignItems "center", CSS.gap "1.5rem"
-           , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
-           ]
-       ]
-       [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
-           [ text "Parent passes theme props to child" ]
+       [ CSS.style_ [ CSS.display "flex", CSS.flexDirection "column"
+                    , CSS.alignItems "center", CSS.gap "1.5rem"
+                    , CSS.padding "2rem", CSS.fontFamily "system-ui,sans-serif" ] ]
+       [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0"
+                              , CSS.fontSize "0.9rem" ] ]
+           [ text "Props + onPropsChanged + parent" ]
        -- mountWithProps_ key props component
        , mountWithProps_ "themed-child" t child
        , H.button_
            [ H.onClick Switch
-           , CSS.style_
-               [ CSS.padding "0.5rem 1.5rem", CSS.border "none", CSS.borderRadius "8px"
-               , CSS.backgroundColor (CSS.hex (themeAccent t)), CSS.color (CSS.hex "fff")
-               , CSS.cursor "pointer", CSS.fontWeight "600"
-               ]
-           ]
-           [ text "Switch theme" ]
+           , CSS.style_ [ CSS.padding "0.5rem 1.5rem", CSS.border "none"
+                        , CSS.borderRadius "8px", CSS.cursor "pointer"
+                        , CSS.backgroundColor (CSS.hex (themeAccent t))
+                        , CSS.color (CSS.hex "fff"), CSS.fontWeight "600" ] ]
+           [ text "Switch theme (fires onPropsChanged in child)" ]
+       , H.p_ [ CSS.style_ [ CSS.color (CSS.hex "475569"), CSS.fontSize "0.78rem"
+                            , CSS.margin "0", CSS.fontFamily "ui-monospace,monospace" ] ]
+           [ text ("Parent themeIdx = " <> ms (_themeIdx m)
+                <> "  ← child reads this via 'parent'") ]
        ]
 ----------------------------------------------------------------------------
 `;
@@ -3030,96 +3122,151 @@ parentView _ m =
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase        #-}
 ----------------------------------------------------------------------------
--- Lesson 18: Effect — io, io_, sync
--- The Effect monad schedules IO without executing it immediately.
--- io  :: IO action -> Effect ...   — async, delivers action to the queue
--- io_ :: IO ()    -> Effect ...   — async, fire-and-forget
--- sync :: IO action -> Effect ... — synchronous (blocks the scheduler)
--- withSink gives direct access to the event Sink for advanced use cases.
+-- Lesson 08: Effect — io / io_ / sync / issue / beforeAll / afterAll
+--
+-- Effect is a Writer monad that accumulates scheduled IO actions.
+-- Nothing runs until miso processes the queue after update returns.
+--
+-- ── Core combinators ──────────────────────────────────────────────────────
+--   io  :: IO action -> Effect parent props model action
+--   -- schedule async IO; deliver its result as an action
+--
+--   io_ :: IO () -> Effect parent props model action
+--   -- schedule async IO; discard the result
+--
+--   sync :: IO action -> Effect parent props model action
+--   -- like io but runs synchronously (blocks the scheduler — use sparingly)
+--
+--   withSink :: (Sink action -> IO ()) -> Effect parent props model action
+--   -- raw access to the event queue; see lesson 28
+--
+-- ── Action chaining ───────────────────────────────────────────────────────
+--   issue :: action -> Effect parent props model action
+--   -- enqueue an additional action to be processed after the current one
+--   -- useful for multi-step sequences without nesting IO
+--
+--   update FetchUser = do
+--     modify (\\m -> m { status = Loading })
+--     issue DoFetch                -- DoFetch runs after this update finishes
+--
+--   update DoFetch = io $ do
+--     result <- callAPI
+--     pure (GotUser result)
+--
+-- ── IO wrapping ───────────────────────────────────────────────────────────
+--   beforeAll :: IO () -> Effect ... -> Effect ...
+--   -- prepend an IO action before all scheduled IO in the effect
+--
+--   afterAll  :: IO () -> Effect ... -> Effect ...
+--   -- append  an IO action after  all scheduled IO in the effect
+--
+--   update FetchWithLog =
+--     beforeAll (consoleLog "starting") $
+--     afterAll  (consoleLog "scheduled") $
+--     io (pure GotResult)
 ----------------------------------------------------------------------------
 module Main where
 ----------------------------------------------------------------------------
-import Control.Concurrent (threadDelay)
-import System.IO          (hFlush, stdout)
-----------------------------------------------------------------------------
-import           Miso
+import Miso
+import Miso.FFI (consoleLog, now)
 import qualified Miso.Html as H
 import qualified Miso.CSS  as CSS
 ----------------------------------------------------------------------------
 data Action
-  = PrintHello
-  | FetchCount
-  | GotCount Int
-  | SyncAction
+  = RunIo           -- io: async IO returning an action
+  | GotTime Double  -- delivered by io
+  | RunIssue        -- issue: chain a follow-up action
+  | Step2           -- chained via issue
+  | Step3           -- chained via issue
+  | RunBeforeAfter  -- beforeAll / afterAll wrapping
+  | GotWrapped      -- delivered by the wrapped io
+  | Clear
   deriving (Eq, Show)
 
-newtype Model = Model { _result :: MisoString } deriving (Eq)
+data Model = Model
+  { _log :: [MisoString] } deriving Eq
 ----------------------------------------------------------------------------
 main :: IO ()
 main = startApp defaultEvents app { mountPoint = Just "app" }
-----------------------------------------------------------------------------
+
 app :: App Model Action
-app = vcomp (Model "—") update view
+app = vcomp (Model []) update view
 ----------------------------------------------------------------------------
 update :: Action -> Effect parent props Model Action
 update = \\case
-  -- io_ schedules fire-and-forget IO asynchronously
-  PrintHello -> io_ $ do
-    putStrLn "Hello from IO! (check stdout panel)"
-    hFlush stdout
 
-  -- io schedules IO that delivers an action when done
-  FetchCount -> do
-    modify (\\m -> m { _result = "loading…" })
+  -- io: schedule async IO, deliver result as an action
+  RunIo -> do
+    logE "io: scheduling…"
     io $ do
-      threadDelay 800000            -- simulate a 0.8 s fetch
-      pure (GotCount 42)
+      t <- now           -- performance.now() — available from Miso.FFI
+      pure (GotTime t)
 
-  GotCount n ->
-    modify (\\m -> m { _result = "Got: " <> ms n })
+  GotTime t ->
+    logE ("io: got time = " <> ms (round t :: Int) <> " ms")
 
-  -- sync runs IO synchronously (blocks; use sparingly)
-  SyncAction -> do
-    io_ (putStrLn "sync action fired" >> hFlush stdout)
-    modify (\\m -> m { _result = "sync done" })
+  -- issue: chain follow-up actions without nesting
+  RunIssue -> do
+    logE "issue: Step1"
+    issue Step2           -- Step2 is enqueued after this update
+
+  Step2 -> do
+    logE "issue: Step2"
+    issue Step3           -- Step3 is enqueued after Step2
+
+  Step3 ->
+    logE "issue: Step3 (done)"
+
+  -- beforeAll / afterAll: wrap IO around an existing effect
+  RunBeforeAfter ->
+    beforeAll (consoleLog ">>> before (check DevTools console)") $
+    afterAll  (consoleLog ">>> after  (check DevTools console)") $
+    io (pure GotWrapped)
+
+  GotWrapped ->
+    logE "beforeAll/afterAll: effect completed (see console)"
+
+  Clear ->
+    modify (\\m -> m { _log = [] })
+
+-- helper: append to log
+logE :: MisoString -> Effect parent props Model Action
+logE msg = modify (\\m -> m { _log = msg : take 7 (_log m) })
 ----------------------------------------------------------------------------
 view :: props -> Model -> View Model Action
 view _ m =
   H.div_
-    [ CSS.style_
-        [ CSS.display "flex", CSS.flexDirection "column"
-        , CSS.alignItems "center", CSS.gap "1.25rem"
-        , CSS.padding "2rem", CSS.fontFamily "system-ui, sans-serif"
-        ]
-    ]
-    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.margin "0" ] ]
-        [ text "IO in the Effect monad" ]
-    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem" ] ]
-        [ btn PrintHello "io_ (print)"  "6366f1"
-        , btn FetchCount "io (async)"   "22c55e"
-        , btn SyncAction "sync"         "f59e0b"
+    [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
+                 , CSS.maxWidth "30rem", CSS.margin "auto" ] ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem"
+                          , CSS.margin "0 0 1rem 0" ] ]
+        [ text "Lesson 08: Effect — io / issue / beforeAll / afterAll" ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.6rem"
+                           , CSS.flexWrap "wrap", CSS.marginBottom "1rem" ] ]
+        [ btn RunIo          "io"          "6366f1"
+        , btn RunIssue       "issue chain" "22c55e"
+        , btn RunBeforeAfter "before/after" "f59e0b"
+        , btn Clear          "clear"        "334155"
         ]
     , H.div_
-        [ CSS.style_
-            [ CSS.padding "0.75rem 2rem", CSS.borderRadius "8px"
-            , CSS.backgroundColor (CSS.hex "1e293b"), CSS.color (CSS.hex "22c55e")
-            , CSS.fontSize "1.2rem", CSS.fontWeight "700"
-            , CSS.fontFamily "ui-monospace, monospace"
-            ]
-        ]
-        [ text (_result m) ]
+        [ CSS.style_ [ CSS.backgroundColor (CSS.hex "0f172a"), CSS.borderRadius "10px"
+                     , CSS.padding "1rem", CSS.fontFamily "ui-monospace,monospace"
+                     , CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.82rem"
+                     , CSS.minHeight "6rem", CSS.display "flex"
+                     , CSS.flexDirection "column", CSS.gap "0.25rem" ] ]
+        (if null (_log m)
+          then [ text "Click a button to see the effect log." ]
+          else map (\\l -> H.p_ [ CSS.style_ [ CSS.margin "0" ] ] [ text l ]) (_log m))
     ]
 
 btn :: Action -> MisoString -> MisoString -> View Model Action
 btn action label col =
   H.button_
     [ H.onClick action
-    , CSS.style_
-        [ CSS.padding "0.5rem 1rem", CSS.border "none", CSS.borderRadius "8px"
-        , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
-        , CSS.cursor "pointer", CSS.fontWeight "600"
-        ]
-    ]
+    , CSS.style_ [ CSS.padding "0.45rem 1rem", CSS.border "none"
+                 , CSS.borderRadius "8px", CSS.cursor "pointer"
+                 , CSS.backgroundColor (CSS.hex col), CSS.color (CSS.hex "fff")
+                 , CSS.fontWeight "600" ] ]
     [ text label ]
 ----------------------------------------------------------------------------
 `;
@@ -4110,37 +4257,47 @@ view _ m =
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase        #-}
 ----------------------------------------------------------------------------
--- Lesson 27: Component Mailbox — mail / mailParent / checkMail
+-- Lesson 23: Component Mailbox — mailParent / checkMail / broadcast
 --
--- Every Component has an async 'mailbox' slot that receives JSON-encoded
--- messages from other components. Miso dispatches the decoded value as
--- a normal action through the update function.
+-- Every Component has an async mailbox slot.  Messages are JSON-encoded
+-- values dispatched as normal actions through the receiving component's
+-- update function.
 --
--- Key API (all re-exported from Miso):
+-- ── Sending ───────────────────────────────────────────────────────────────
+--   mailParent      :: ToJSON msg => msg -> Effect parent props model action
+--   -- → direct parent only
 --
+--   mailChildren    :: ToJSON msg => msg -> Effect parent props model action
+--   -- → all immediate children
+--
+--   mailAncestors   :: ToJSON msg => msg -> Effect parent props model action
+--   -- → every ancestor, walking up the tree
+--
+--   mailDescendants :: ToJSON msg => msg -> Effect parent props model action
+--   -- → every descendant, walking down the tree
+--
+--   broadcast       :: (Eq model, ToJSON msg) => msg -> Effect parent props model action
+--   -- → EVERY other mounted Component that has a mailbox (tree-wide)
+--
+--   mail :: ToJSON msg => ComponentId -> msg -> IO ()
+--   -- → a specific component by ID (use 'ask' to get your own ComponentId)
+--
+-- ── Receiving ────────────────────────────────────────────────────────────
 --   checkMail
 --     :: FromJSON value
 --     => (value -> action)       -- success
 --     -> (MisoString -> action)  -- decode error
 --     -> Value -> Maybe action
 --
---   mailParent :: ToJSON message => message -> Effect parent props model action
---   -- sends to direct parent's mailbox
+--   Wire up via the mailbox field:
+--     app { mailbox = checkMail GotMsg MailErr }
 --
---   mailChildren    :: ToJSON message => message -> Effect parent props model action
---   mailAncestors   :: ToJSON message => message -> Effect parent props model action
---   mailDescendants :: ToJSON message => message -> Effect parent props model action
---   broadcast       :: (Eq model, ToJSON message) => message -> Effect parent props model action
---   -- broadcasts to every OTHER mounted component
+-- ── mailParent vs broadcast ───────────────────────────────────────────────
+--   mailParent: one-to-one, up the tree
+--   broadcast:  one-to-all (every other Component with a matching mailbox)
 --
---   mail :: ToJSON message => ComponentId -> message -> IO ()
---   -- sends to a specific component by ID (obtained via 'ask' in Effect)
---
--- Wire up the mailbox field when constructing the App/Component:
---   app { mailbox = checkMail ReceivedMsg MailError }
---
--- This lesson: parent mounts a child; child sends a greeting via
--- mailParent; parent displays received messages.
+-- This lesson mounts two sibling children.  Child A can mailParent (only
+-- parent receives) or broadcast (parent AND sibling B both receive).
 ----------------------------------------------------------------------------
 module Main where
 ----------------------------------------------------------------------------
@@ -4148,89 +4305,131 @@ import Miso
 import qualified Miso.Html as H
 import qualified Miso.CSS  as CSS
 ----------------------------------------------------------------------------
--- ── Parent ──────────────────────────────────────────────────────────────
-data ParentAction
-  = GotMail MisoString   -- received from child's mailParent
-  | MailError MisoString -- decode error
+-- ── Shared message type ───────────────────────────────────────────────────
+type Msg = MisoString   -- use MisoString for simplicity; real apps use ADTs
 
-data ParentModel = ParentModel
-  { _inbox :: [MisoString] }
-  deriving Eq
+-- ── Parent ────────────────────────────────────────────────────────────────
+data ParentAction
+  = ParentGotMail Msg
+  | ParentMailErr MisoString
+
+data ParentModel = ParentModel { _pInbox :: [MisoString] } deriving Eq
 
 main :: IO ()
 main = startApp defaultEvents myApp { mountPoint = Just "app" }
 
 myApp :: App ParentModel ParentAction
 myApp = (vcomp (ParentModel []) parentUpdate parentView)
-  { mailbox = checkMail GotMail MailError }
+  { mailbox = checkMail ParentGotMail ParentMailErr }
 
 parentUpdate :: ParentAction -> Effect parent props ParentModel ParentAction
 parentUpdate = \\case
-  GotMail msg  -> modify (\\m -> m { _inbox = msg : take 4 (_inbox m) })
-  MailError e  -> modify (\\m -> m { _inbox = ("decode error: " <> e) : _inbox m })
+  ParentGotMail msg -> modify (\\m -> m { _pInbox = ("[parent] " <> msg) : take 5 (_pInbox m) })
+  ParentMailErr e   -> modify (\\m -> m { _pInbox = ("err: " <> e) : _pInbox m })
 
-parentView :: props -> ParentModel -> View ParentModel ParentAction
+parentView :: () -> ParentModel -> View ParentModel ParentAction
 parentView _ m =
   H.div_
     [ CSS.style_ [ CSS.padding "1.5rem", CSS.fontFamily "system-ui,sans-serif"
-                 , CSS.maxWidth "28rem", CSS.margin "auto" ] ]
-    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem", CSS.margin "0 0 1rem 0" ] ]
-        [ text "Lesson 27: mailbox — parent receives from child" ]
-
-    -- Mount the child component
-    , H.div_
-        [ CSS.style_ [ CSS.border "2px solid #6366f1", CSS.borderRadius "10px"
-                     , CSS.padding "1rem", CSS.marginBottom "1rem" ] ]
-        [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.75rem", CSS.margin "0 0 0.5rem 0" ] ]
-            [ text "Child component:" ]
-        , component_ childComp
+                 , CSS.maxWidth "32rem", CSS.margin "auto" ] ]
+    [ H.h2_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.9rem"
+                          , CSS.margin "0 0 1rem 0" ] ]
+        [ text "mailParent vs broadcast" ]
+    , H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "1rem"
+                           , CSS.marginBottom "1rem" ] ]
+        [ childBox childA "Child A" "6366f1"
+        , childBox childB "Child B (sibling)" "f59e0b"
         ]
-
-    -- Parent inbox
-    , H.div_
-        [ CSS.style_ [ CSS.backgroundColor (CSS.hex "0f172a"), CSS.borderRadius "10px"
-                     , CSS.padding "1rem", CSS.fontFamily "ui-monospace,monospace"
-                     , CSS.color (CSS.hex "22c55e"), CSS.fontSize "0.82rem"
-                     , CSS.minHeight "4rem" ] ]
-        (if null (_inbox m)
-          then [ text "Parent inbox is empty — press Send in the child." ]
-          else map (\\msg -> H.p_ [ CSS.style_ [ CSS.margin "0.2rem 0" ] ] [ text msg ]) (_inbox m))
+    , logBox "Inbox (all components)" (_pInbox m)
     ]
 
--- ── Child ────────────────────────────────────────────────────────────────
+childBox :: Component ParentModel () ChildModel ChildAction
+         -> MisoString -> MisoString -> View ParentModel ParentAction
+childBox comp label col =
+  H.div_
+    [ CSS.style_ [ CSS.border ("2px solid #" <> col), CSS.borderRadius "10px"
+                 , CSS.padding "0.75rem", CSS.flex "1" ] ]
+    [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex col), CSS.fontWeight "700"
+                         , CSS.fontSize "0.8rem", CSS.margin "0 0 0.5rem 0" ] ]
+        [ text label ]
+    , component_ comp
+    ]
+
+logBox :: MisoString -> [MisoString] -> View model action
+logBox title msgs =
+  H.div_ []
+    [ H.p_ [ CSS.style_ [ CSS.color (CSS.hex "6b7280"), CSS.fontSize "0.75rem"
+                         , CSS.margin "0 0 0.3rem 0" ] ] [ text title ]
+    , H.div_
+        [ CSS.style_ [ CSS.backgroundColor (CSS.hex "0f172a"), CSS.borderRadius "8px"
+                     , CSS.padding "0.75rem", CSS.fontFamily "ui-monospace,monospace"
+                     , CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.78rem"
+                     , CSS.minHeight "4rem" ] ]
+        (if null msgs
+          then [ text "nothing yet" ]
+          else map (\\l -> H.p_ [ CSS.style_ [ CSS.margin "0.15rem 0" ] ] [ text l ]) msgs)
+    ]
+
+-- ── Children (A and B) ────────────────────────────────────────────────────
 data ChildAction
-  = SendToParent
-  | Inc
+  = SendToParent      -- mailParent only
+  | DoBroadcast       -- broadcast to ALL
+  | ChildGotMail Msg  -- received via mailbox
+  | ChildMailErr MisoString
 
-data ChildModel = ChildModel { _clicks :: Int } deriving Eq
+data ChildModel = ChildModel { _cInbox :: [MisoString] } deriving Eq
 
-childComp :: Component ParentModel () ChildModel ChildAction
-childComp = vcomp (ChildModel 0) childUpdate childView
+mkChild :: Component ParentModel () ChildModel ChildAction
+mkChild = (vcomp (ChildModel []) childUpdate childView)
+  { mailbox = checkMail ChildGotMail ChildMailErr }
+
+childA :: Component ParentModel () ChildModel ChildAction
+childA = mkChild
+
+childB :: Component ParentModel () ChildModel ChildAction
+childB = mkChild
 
 childUpdate :: ChildAction -> Effect ParentModel () ChildModel ChildAction
 childUpdate = \\case
-  Inc ->
-    modify (\\m -> m { _clicks = _clicks m + 1 })
-  SendToParent -> do
-    n <- _clicks <$> get
-    -- mailParent sends a JSON value to the parent's mailbox field
-    mailParent ("click #" <> ms n <> " from child" :: MisoString)
+  SendToParent ->
+    -- mailParent: only the direct parent's mailbox receives this
+    mailParent ("via mailParent" :: MisoString)
+
+  DoBroadcast ->
+    -- broadcast: every OTHER component's mailbox receives this
+    broadcast ("via broadcast" :: MisoString)
+
+  ChildGotMail msg ->
+    modify (\\m -> m { _cInbox = msg : take 3 (_cInbox m) })
+
+  ChildMailErr _ -> pure ()
 
 childView :: () -> ChildModel -> View ChildModel ChildAction
 childView _ m =
-  H.div_ [ CSS.style_ [ CSS.display "flex", CSS.gap "0.75rem", CSS.alignItems "center" ] ]
+  H.div_ [ CSS.style_ [ CSS.display "flex", CSS.flexDirection "column"
+                       , CSS.gap "0.4rem" ] ]
     [ H.button_
-        [ H.onClick Inc
-        , CSS.style_ [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
-                     , CSS.backgroundColor (CSS.hex "334155"), CSS.color (CSS.hex "94a3b8")
-                     , CSS.cursor "pointer" ] ]
-        [ text ("Count: " <> ms (_clicks m)) ]
-    , H.button_
         [ H.onClick SendToParent
-        , CSS.style_ [ CSS.padding "0.4rem 1rem", CSS.border "none", CSS.borderRadius "8px"
-                     , CSS.backgroundColor (CSS.hex "6366f1"), CSS.color (CSS.hex "fff")
-                     , CSS.cursor "pointer", CSS.fontWeight "700" ] ]
-        [ text "Send to parent" ]
+        , CSS.style_ [ CSS.padding "0.3rem 0.6rem", CSS.border "none"
+                     , CSS.borderRadius "6px", CSS.cursor "pointer"
+                     , CSS.backgroundColor (CSS.hex "1e293b")
+                     , CSS.color (CSS.hex "94a3b8"), CSS.fontSize "0.78rem" ] ]
+        [ text "mailParent" ]
+    , H.button_
+        [ H.onClick DoBroadcast
+        , CSS.style_ [ CSS.padding "0.3rem 0.6rem", CSS.border "none"
+                     , CSS.borderRadius "6px", CSS.cursor "pointer"
+                     , CSS.backgroundColor (CSS.hex "6366f1")
+                     , CSS.color (CSS.hex "fff"), CSS.fontSize "0.78rem"
+                     , CSS.fontWeight "700" ] ]
+        [ text "broadcast" ]
+    , if null (_cInbox m)
+        then H.p_ [ CSS.style_ [ CSS.color (CSS.hex "475569"), CSS.fontSize "0.72rem"
+                                , CSS.margin "0", CSS.fontFamily "ui-monospace,monospace" ] ]
+               [ text "inbox empty" ]
+        else H.div_ [ CSS.style_ [ CSS.fontFamily "ui-monospace,monospace"
+                                  , CSS.fontSize "0.72rem", CSS.color (CSS.hex "22c55e") ] ]
+               (map (\\l -> H.p_ [ CSS.style_ [ CSS.margin "0.1rem 0" ] ] [ text l ]) (_cInbox m))
     ]
 ----------------------------------------------------------------------------
 `;
@@ -5089,8 +5288,9 @@ box label colour =
       const rowSplitter  = document.getElementById("rowSplitter");
       const appDiv       = document.getElementById("app");
       const stdoutSection = document.getElementById("stdoutSection");
-      rowSplitter.addEventListener("mousedown", e => {
+      rowSplitter.addEventListener("pointerdown", e => {
         e.preventDefault();
+        rowSplitter.setPointerCapture(e.pointerId);
         rowSplitter.classList.add("active");
         const startY  = e.clientY;
         const appH0   = appDiv.getBoundingClientRect().height;
@@ -5103,11 +5303,11 @@ box label colour =
         };
         const onUp = () => {
           rowSplitter.classList.remove("active");
-          document.removeEventListener("mousemove", onMove);
-          document.removeEventListener("mouseup", onUp);
+          rowSplitter.removeEventListener("pointermove", onMove);
+          rowSplitter.removeEventListener("pointerup", onUp);
         };
-        document.addEventListener("mousemove", onMove);
-        document.addEventListener("mouseup", onUp);
+        rowSplitter.addEventListener("pointermove", onMove);
+        rowSplitter.addEventListener("pointerup", onUp);
       });
 
       document.getElementById("clearStdoutBtn").addEventListener("click", () => {
@@ -5126,6 +5326,7 @@ box label colour =
         const inFs = !!document.fullscreenElement;
         document.getElementById("fsEnterIcon").style.display = inFs ? "none" : "";
         document.getElementById("fsExitIcon").style.display = inFs ? "" : "none";
+        window.editor?.layout();
       });
 
       // Theme picker
