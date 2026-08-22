@@ -13,6 +13,9 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Try miso — a tasty web framework" />
     <meta name="twitter:description" content="Write and run miso Haskell apps live in your browser, compiled to WebAssembly via GHC. No install required." />
+    <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0d0b" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.min.css"
@@ -23,27 +26,108 @@
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Source+Code+Pro:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Source+Code+Pro:wght@400;500&display=swap" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('miso-pg-page-theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.dataset.theme = t;
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
     <style>
+      /* Design tokens from haskell-miso.org — warm paper + ink, one amber accent,
+         hairline borders. Light and dark via [data-theme] on <html>. */
+      :root {
+        --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+          Consolas, monospace;
+
+        --bg: #fbfaf7;
+        --bg-elev: #ffffff;
+        --bg-sunk: #f2efe8;
+        --ink: #16140f;
+        --ink-2: #4b463e;
+        --muted: #7b756b;
+        --line: #e7e2d9;
+        --line-strong: #d3cdc1;
+
+        --accent: #e8890c;
+        --accent-ink: #8a4a05;
+        --accent-soft: rgba(232, 137, 12, 0.12);
+
+        --code-bg: #f6f3ec;
+        --code-fg: #23201a;
+        --code-line: #e3ddd0;
+
+        --err: #c93c2c;
+        --warn: #a16207;
+
+        --radius: 14px;
+        --radius-sm: 9px;
+        --shadow-1: 0 1px 2px rgba(20, 18, 16, 0.05), 0 8px 24px -12px rgba(20, 18, 16, 0.18);
+        --shadow-2: 0 2px 4px rgba(20, 18, 16, 0.06), 0 24px 48px -20px rgba(20, 18, 16, 0.28);
+
+        color-scheme: light;
+      }
+      html[data-theme="dark"] {
+        --bg: #0e0d0b;
+        --bg-elev: #161412;
+        --bg-sunk: #1a1815;
+        --ink: #f3efe7;
+        --ink-2: #cfc8bc;
+        --muted: #958d81;
+        --line: #29251f;
+        --line-strong: #3b352d;
+
+        --accent: #ffb84a;
+        --accent-ink: #ffcf7d;
+        --accent-soft: rgba(255, 184, 74, 0.14);
+
+        --code-bg: #0a0908;
+        --code-fg: #ece6da;
+        --code-line: #221f1a;
+
+        --err: #f87171;
+        --warn: #fbbf24;
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+        --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.4), 0 24px 48px -20px rgba(0, 0, 0, 0.7);
+
+        color-scheme: dark;
+      }
       html,
       body {
         height: 100%;
       }
       body {
         margin: 0;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        background: #0f172a;
-        color: #e5e7eb;
+        font-family: var(--font-body);
+        background: var(--bg);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
         display: flex;
         flex-direction: column;
         -webkit-overflow-scrolling: touch;
       }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 4px;
+      }
+      ::selection { background: var(--accent-soft); }
       .topbar {
         display: flex;
         align-items: baseline;
         gap: 0.75rem;
         padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid #1f2937;
+        border-bottom: 1px solid var(--line);
         flex-shrink: 0;
       }
       .topbar-github {
@@ -51,18 +135,18 @@
         display: flex;
         align-items: center;
         align-self: center;
-        color: #6b7280;
+        color: var(--muted);
         text-decoration: none;
         font-size: 1.25rem;
         line-height: 1;
         transition: color 0.15s;
       }
-      .topbar-github:hover { color: #e5e7eb; }
+      .topbar-github:hover { color: var(--ink); }
       .topbar-fullscreen {
         display: flex;
         align-items: center;
         align-self: center;
-        color: #6b7280;
+        color: var(--muted);
         background: none;
         border: none;
         cursor: pointer;
@@ -71,17 +155,21 @@
         padding: 0;
         transition: color 0.15s;
       }
-      .topbar-fullscreen:hover { color: #e5e7eb; }
+      .topbar-fullscreen:hover { color: var(--ink); }
+      .theme-sun, .theme-moon { display: none; }
+      html[data-theme="light"] .theme-moon { display: block; }
+      html[data-theme="dark"] .theme-sun { display: block; }
       .topbar h1 {
         margin: 0;
         font-size: 1rem;
         font-weight: 700;
+        letter-spacing: -0.025em;
         white-space: nowrap;
       }
       .topbar p {
         margin: 0;
         font-size: 0.78rem;
-        color: #6b7280;
+        color: var(--muted);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -95,28 +183,29 @@
       .splitter {
         flex: 0 0 5px;
         cursor: col-resize;
-        background: #1f2937;
+        background: var(--line);
         border-radius: 3px;
         margin: 0 3px;
         transition: background 0.15s;
       }
-      .splitter:hover, .splitter.active { background: #374151; }
+      .splitter:hover, .splitter.active { background: var(--line-strong); }
       .row-splitter {
         flex: 0 0 5px;
         cursor: row-resize;
-        background: #1f2937;
+        background: var(--line);
         border-radius: 3px;
         margin: 3px 0;
         transition: background 0.15s;
         touch-action: none;
       }
-      .row-splitter:hover, .row-splitter.active { background: #374151; }
+      .row-splitter:hover, .row-splitter.active { background: var(--line-strong); }
       .pane {
         flex: 1;
         min-width: 0;
-        background: #111827;
-        border: 1px solid #1f2937;
-        border-radius: 12px;
+        background: var(--bg-elev);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-1);
         display: flex;
         flex-direction: column;
         min-height: 0;
@@ -124,49 +213,53 @@
       }
       header {
         padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid #1f2937;
+        border-bottom: 1px solid var(--line);
         font-weight: 600;
         display: flex;
         align-items: center;
         justify-content: space-between;
       }
       #runBtn {
-        background: #22c55e;
+        background: var(--ink);
+        color: var(--bg);
         border: none;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         padding: 0.3rem 0.75rem;
         font-weight: 600;
         cursor: pointer;
         font-size: 0.85rem;
         touch-action: manipulation;
       }
+      html[data-theme="dark"] #runBtn { background: var(--accent); color: #1a1208; }
       #shareBtn {
-        background: #3b82f6;
-        border: none;
-        border-radius: 8px;
+        background: var(--bg-elev);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
         padding: 0.3rem 0.75rem;
         font-weight: 600;
         cursor: pointer;
         font-size: 0.85rem;
-        color: #fff;
+        color: var(--ink);
         touch-action: manipulation;
+        transition: border-color 0.15s, box-shadow 0.15s;
       }
-      #shareBtn:hover { background: #2563eb; }
+      #shareBtn:hover { border-color: var(--line-strong); box-shadow: var(--shadow-1); }
       #shareBtn:disabled { opacity: 0.5; cursor: default; }
       .share-modal-overlay {
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.65);
+        background: rgba(0,0,0,0.55);
         z-index: 1000;
         align-items: center;
         justify-content: center;
       }
       .share-modal-overlay.open { display: flex; }
       .share-modal {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 14px;
+        background: var(--bg-elev);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-2);
         padding: 1.5rem;
         max-width: 480px;
         width: 90%;
@@ -178,12 +271,13 @@
         margin: 0;
         font-size: 1rem;
         font-weight: 700;
-        color: #e5e7eb;
+        letter-spacing: -0.025em;
+        color: var(--ink);
       }
       .share-modal p {
         margin: 0;
         font-size: 0.85rem;
-        color: #6b7280;
+        color: var(--muted);
       }
       .share-modal .share-url-row {
         display: flex;
@@ -191,27 +285,27 @@
       }
       .share-modal input {
         flex: 1;
-        background: #0f172a;
-        border: 1px solid #334155;
-        border-radius: 8px;
+        background: var(--bg-sunk);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
         padding: 0.45rem 0.65rem;
-        color: #e5e7eb;
-        font-family: ui-monospace, Menlo, Consolas, monospace;
+        color: var(--ink);
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         outline: none;
       }
       .share-modal .copy-btn {
-        background: #3b82f6;
+        background: var(--ink);
         border: none;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         padding: 0.45rem 0.85rem;
-        color: #fff;
+        color: var(--bg);
         font-weight: 600;
         font-size: 0.82rem;
         cursor: pointer;
         white-space: nowrap;
       }
-      .share-modal .copy-btn:hover { background: #2563eb; }
+      html[data-theme="dark"] .share-modal .copy-btn { background: var(--accent); color: #1a1208; }
       .share-modal-header {
         display: flex;
         align-items: center;
@@ -220,7 +314,7 @@
       .share-modal .close-btn {
         background: none;
         border: none;
-        color: #9ca3af;
+        color: var(--muted);
         font-size: 1.2rem;
         line-height: 1;
         cursor: pointer;
@@ -229,7 +323,7 @@
         align-items: center;
         justify-content: center;
       }
-      .share-modal .close-btn:hover { color: #e5e7eb; }
+      .share-modal .close-btn:hover { color: var(--ink); }
       #leftPane  { flex: 55; }
       #rightPane { flex: 45; }
       #editor {
@@ -262,13 +356,13 @@
       }
       .loading {
         padding: 1rem;
-        color: #6b7280;
+        color: var(--muted);
         font-size: 0.9rem;
         animation: pulse 1.5s ease-in-out infinite;
       }
       .outputs .label {
         font-size: 0.85rem;
-        opacity: 0.8;
+        color: var(--ink-2);
         margin: 0.35rem 0;
         display: flex;
         align-items: center;
@@ -280,19 +374,19 @@
         background: none;
         border: none;
         cursor: pointer;
-        color: #6b7280;
+        color: var(--muted);
         padding: 0;
         line-height: 1;
         transition: color 0.15s;
       }
-      .clear-btn:hover { color: #e5e7eb; }
+      .clear-btn:hover { color: var(--ink); }
       .outputs textarea {
         flex: 1;
         min-height: 0;
-        background: #0b1020;
-        color: #d1fae5;
-        border: 1px solid #223;
-        border-radius: 8px;
+        background: var(--code-bg);
+        color: var(--code-fg);
+        border: 1px solid var(--code-line);
+        border-radius: var(--radius-sm);
         padding: 0.6rem;
         resize: none;
         box-sizing: border-box;
@@ -300,10 +394,10 @@
       #app {
         flex: 3;
         min-height: 0;
-        background: #0b1020;
-        color: #d1fae5;
-        border: 1px solid #223;
-        border-radius: 8px;
+        background: var(--code-bg);
+        color: var(--code-fg);
+        border: 1px solid var(--code-line);
+        border-radius: var(--radius-sm);
         padding: 0.6rem;
         box-sizing: border-box;
         overflow: auto;
@@ -360,11 +454,11 @@
         .font-controls { display: none; }
       }
       .editor-ctrl-btn {
-        background: #1e293b;
-        border: 1px solid #334155;
+        background: var(--bg-elev);
+        border: 1px solid var(--line);
         border-radius: 6px;
         padding: 0.2rem 0.45rem;
-        color: #9ca3af;
+        color: var(--ink-2);
         font-size: 0.75rem;
         font-weight: 600;
         cursor: pointer;
@@ -372,24 +466,28 @@
         transition: color 0.15s, border-color 0.15s;
         white-space: nowrap;
       }
-      .editor-ctrl-btn:hover { color: #e5e7eb; border-color: #4b5563; }
-      .editor-ctrl-btn.active { color: #22c55e; border-color: #22c55e; }
+      .editor-ctrl-btn:hover { color: var(--ink); border-color: var(--line-strong); }
+      .editor-ctrl-btn.active {
+        color: var(--accent-ink);
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
       .editor-ctrl-select {
-        background: #1e293b;
-        border: 1px solid #334155;
+        background: var(--bg-elev);
+        border: 1px solid var(--line);
         border-radius: 6px;
         padding: 0.2rem 0.35rem;
-        color: #9ca3af;
+        color: var(--ink-2);
         font-size: 0.75rem;
         cursor: pointer;
         outline: none;
         max-width: 10rem;
       }
-      .editor-ctrl-select:hover { border-color: #4b5563; }
+      .editor-ctrl-select:hover { border-color: var(--line-strong); }
       .editor-ctrl-divider {
         width: 1px;
         height: 1.25em;
-        background: #374151;
+        background: var(--line);
         flex-shrink: 0;
       }
       .font-controls {
@@ -399,7 +497,7 @@
       }
       .problems-panel {
         flex: 0 0 auto;
-        border-top: 1px solid #1f2937;
+        border-top: 1px solid var(--line);
       }
       .problems-header {
         display: flex;
@@ -407,11 +505,11 @@
         gap: 0.5rem;
         padding: 0.3rem 0.75rem;
         font-size: 0.78rem;
-        color: #9ca3af;
+        color: var(--muted);
         cursor: pointer;
         user-select: none;
       }
-      .problems-header:hover { color: #e5e7eb; }
+      .problems-header:hover { color: var(--ink); }
       .problems-title { flex: 1; }
       .problems-list {
         display: none;
@@ -422,33 +520,34 @@
       .problem-item {
         padding: 0.2rem 0.75rem;
         font-size: 0.76rem;
-        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-family: var(--font-mono);
         cursor: pointer;
         display: flex;
         gap: 0.5rem;
         align-items: baseline;
         min-width: 0;
       }
-      .problem-item:hover { background: #1f2937; }
+      .problem-item:hover { background: var(--bg-sunk); }
       .problem-item .problem-icon { flex-shrink: 0; }
-      .problem-item .problem-loc { color: #6b7280; white-space: nowrap; flex-shrink: 0; }
-      .problem-item .problem-msg { color: #d1d5db; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .problem-item.error .problem-icon { color: #f87171; }
-      .problem-item.warning .problem-icon { color: #fbbf24; }
+      .problem-item .problem-loc { color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+      .problem-item .problem-msg { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .problem-item.error .problem-icon { color: var(--err); }
+      .problem-item.warning .problem-icon { color: var(--warn); }
       .shortcuts-modal-overlay {
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.65);
+        background: rgba(0,0,0,0.55);
         z-index: 1000;
         align-items: center;
         justify-content: center;
       }
       .shortcuts-modal-overlay.open { display: flex; }
       .shortcuts-modal {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 14px;
+        background: var(--bg-elev);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-2);
         padding: 1.5rem;
         max-width: 420px;
         width: 90%;
@@ -460,7 +559,8 @@
         margin: 0;
         font-size: 1rem;
         font-weight: 700;
-        color: #e5e7eb;
+        letter-spacing: -0.025em;
+        color: var(--ink);
       }
       .shortcuts-modal-header {
         display: flex;
@@ -473,10 +573,10 @@
         gap: 0.5rem 1.25rem;
       }
       .shortcut-key {
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        color: #e5e7eb;
-        background: #0f172a;
-        border: 1px solid #334155;
+        font-family: var(--font-mono);
+        color: var(--ink);
+        background: var(--bg-sunk);
+        border: 1px solid var(--line);
         border-radius: 5px;
         padding: 0.15rem 0.5rem;
         white-space: nowrap;
@@ -485,7 +585,7 @@
         font-size: 0.78rem;
       }
       .shortcut-desc {
-        color: #9ca3af;
+        color: var(--muted);
         align-self: center;
         font-size: 0.85rem;
       }
@@ -543,12 +643,12 @@
         }
         await new Promise(res => {
           const overlay = Object.assign(document.createElement("div"), {
-            style: "position:fixed;inset:0;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.25rem;padding:2rem;z-index:9999;text-align:center",
+            style: "position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.25rem;padding:2rem;z-index:9999;text-align:center",
             innerHTML: `
-              <p style="color:#e5e7eb;font-size:0.95rem;max-width:28rem;margin:0;line-height:1.6">
+              <p style="color:var(--ink);font-size:0.95rem;max-width:28rem;margin:0;line-height:1.6">
                 This playground loads several hundred MB of WebAssembly and may crash on mobile browsers.
               </p>
-              <button id="tryAnywayBtn" style="background:#22c55e;border:none;border-radius:8px;padding:0.5rem 1.25rem;font-weight:600;font-size:0.9rem;cursor:pointer;touch-action:manipulation">
+              <button id="tryAnywayBtn" style="background:var(--accent);border:none;border-radius:9px;padding:0.5rem 1.25rem;font-weight:600;font-size:0.9rem;color:#1a1208;cursor:pointer;touch-action:manipulation">
                 Try anyway
               </button>
             `,
@@ -624,12 +724,12 @@
       if (!rootfsResp.ok) {
         document.getElementById("editor").innerHTML = "";
         document.getElementById("app").innerHTML =
-          `<div style="padding:1.5rem;color:#f87171;font-family:ui-monospace,monospace;font-size:0.85rem;line-height:1.7">
+          `<div style="padding:1.5rem;color:var(--err);font-family:var(--font-mono);font-size:0.85rem;line-height:1.7">
             <strong>rootfs.tar.zst not found (HTTP ${rootfsResp.status})</strong><br>
             Build it first:<br>
-            <code style="color:#86efac">./build-root.sh</code><br><br>
+            <code style="color:var(--accent-ink)">./build-root.sh</code><br><br>
             Then serve the directory with a static file server, e.g.:<br>
-            <code style="color:#86efac">python3 -m http.server</code>
+            <code style="color:var(--accent-ink)">python3 -m http.server</code>
           </div>`;
         document.getElementById("runBtn").textContent = "rootfs missing";
         throw new Error("rootfs.tar.zst not found — run ./build-root.sh first");
@@ -1697,7 +1797,8 @@ restartBtn =
 
       const savedFontSize = parseInt(localStorage.getItem('miso-pg-fontSize') || '14', 10);
       const savedFontFamily = localStorage.getItem('miso-pg-fontFamily') || "'Fira Code', monospace";
-      const savedTheme = localStorage.getItem('miso-pg-theme') || 'vs-dark';
+      const savedTheme = localStorage.getItem('miso-pg-theme')
+        || (document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'vs');
 
       window.editor = monaco.editor.create(document.getElementById("editor"), {
         value: initialSource,
@@ -2011,6 +2112,18 @@ restartBtn =
         localStorage.setItem('miso-pg-theme', themePicker.value);
       });
 
+      // Page theme toggle — Monaco follows unless an editor theme was picked explicitly
+      document.getElementById('pageThemeBtn').addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem('miso-pg-page-theme', next);
+        if (!localStorage.getItem('miso-pg-theme')) {
+          const editorTheme = next === 'dark' ? 'vs-dark' : 'vs';
+          monaco.editor.setTheme(editorTheme);
+          themePicker.value = editorTheme;
+        }
+      });
+
       // Problems panel toggle
       document.getElementById('problemsHeader').addEventListener('click', () => {
         const panel   = document.getElementById('problemsPanel');
@@ -2041,6 +2154,16 @@ restartBtn =
           <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
         </svg>
       </a>
+      <button class="topbar-fullscreen" id="pageThemeBtn" aria-label="Toggle light/dark theme" title="Toggle light/dark theme">
+        <svg class="theme-sun" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
+          <path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+        </svg>
+        <svg class="theme-moon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
       <button class="topbar-fullscreen" id="shortcutsBtn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -2081,7 +2204,7 @@ restartBtn =
             <div style="display:flex;align-items:center;gap:0.35rem;">
               <div class="font-controls">
                 <button id="fontSizeDown" class="editor-ctrl-btn" title="Decrease font size" aria-label="Decrease font size">A−</button>
-                <span id="fontSizeDisplay" style="font-size:0.75rem;color:#9ca3af;min-width:1.5rem;text-align:center;"></span>
+                <span id="fontSizeDisplay" style="font-size:0.75rem;color:var(--muted);min-width:1.5rem;text-align:center;"></span>
                 <button id="fontSizeUp" class="editor-ctrl-btn" title="Increase font size" aria-label="Increase font size">A+</button>
                 <select id="fontFamilyPicker" class="editor-ctrl-select" aria-label="Font family">
                   <option value="ui-monospace, Menlo, Consolas, monospace">System mono</option>
@@ -2135,7 +2258,7 @@ restartBtn =
             <textarea
               id="stdout"
               readonly
-              style="font-family: ui-monospace, Menlo, Consolas, monospace"
+              style="font-family: var(--font-mono)"
             ></textarea>
           </div>
         </div>
