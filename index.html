@@ -952,7 +952,7 @@ emptyModel :: Model
 emptyModel = Model { _count = 0, _animating = True }
 ----------------------------------------------------------------------------
 -- | Updates model, optionally introduces side effects
-updateModel :: Action -> Effect parent props Model Action
+updateModel :: Action -> Effect context props Model Action
 updateModel = \\case
   AddOne        -> count += 1
   SubtractOne   -> count -= 1
@@ -1123,7 +1123,7 @@ app = component emptyModel updateModel viewModel
 emptyModel :: Model
 emptyModel = Model { _text = "world" }
 ----------------------------------------------------------------------------
-updateModel :: Action -> Effect parent props Model Action
+updateModel :: Action -> Effect context props Model Action
 updateModel = \\case
   SetText s -> txt .= s
 ----------------------------------------------------------------------------
@@ -1382,7 +1382,7 @@ hardDrop board p =
   in if isValid board p' then hardDrop board p' else p
 ----------------------------------------------------------------------------
 -- Update
-updateModel :: Action -> Effect parent props Model Action
+updateModel :: Action -> Effect context props Model Action
 updateModel = \\case
 
   Restart -> modify $ \\m -> mkModel (mRng m * 6364136 + 1442695)
