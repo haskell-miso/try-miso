@@ -960,7 +960,7 @@ updateModel = \\case
   SayHelloWorld -> io_ (putStrLn "Hello World" >> hFlush stdout)
 ----------------------------------------------------------------------------
 -- | Helper for rendering a styled icon button
-iconBtn :: Action -> MisoString -> View context Model Action
+iconBtn :: Action -> MisoString -> View context props Model Action
 iconBtn action label =
   H.button_
     [ H.onClick action
@@ -974,8 +974,8 @@ iconBtn action label =
     [ text label ]
 ----------------------------------------------------------------------------
 -- | Constructs a virtual DOM from a model
-viewModel :: context -> props -> Model -> View context Model Action
-viewModel _ _ m =
+viewModel :: Model -> View context props Model Action
+viewModel m =
   H.div_
     [ CSS.style_
         [ CSS.display "flex", CSS.flexDirection "row", CSS.alignItems "center"
@@ -986,7 +986,7 @@ viewModel _ _ m =
     [ counterSection m, canvasSection m ]
 ----------------------------------------------------------------------------
 -- | Counter section: increment, decrement, and hello world button
-counterSection :: Model -> View context Model Action
+counterSection :: Model -> View context props Model Action
 counterSection m =
   H.div_
     [ CSS.style_
@@ -1017,7 +1017,7 @@ counterSection m =
     ]
 ----------------------------------------------------------------------------
 -- | Canvas section: orbiting dot animation with play/pause toggle
-canvasSection :: Model -> View context Model Action
+canvasSection :: Model -> View context props Model Action
 canvasSection m =
   H.div_
     [ CSS.style_
@@ -1057,7 +1057,7 @@ canvasSection m =
         playState = if _animating m then "running" else "paused"
 ----------------------------------------------------------------------------
 -- | Renders a dot orbiting at a given radius, speed, and color
-orbitDot :: MisoString -> CSS.Color -> MisoString -> MisoString -> MisoString -> View context Model Action
+orbitDot :: MisoString -> CSS.Color -> MisoString -> MisoString -> MisoString -> View context props Model Action
 orbitDot dur color sz offset playState =
   H.div_
     [ CSS.style_
@@ -1089,7 +1089,7 @@ main :: IO ()
 main = startApp defaultEvents app { mountPoint = Just "app" }
 ----------------------------------------------------------------------------
 app :: App () ()
-app = component () noop (\\_ _ _ -> "Hello, miso! 🍜")
+app = component () noop (\\_ -> "Hello, miso! 🍜")
 ----------------------------------------------------------------------------
 `;
 
@@ -1127,8 +1127,8 @@ updateModel :: Action -> Effect parent props Model Action
 updateModel = \\case
   SetText s -> txt .= s
 ----------------------------------------------------------------------------
-viewModel :: context -> props -> Model -> View context Model Action
-viewModel _ _ m =
+viewModel :: Model -> View context props Model Action
+viewModel m =
   H.div_
     [ CSS.style_
         [ CSS.display "flex", CSS.flexDirection "column"
@@ -1239,8 +1239,8 @@ app :: App Model Action
 app = (component initModel updateModel viewModel)
   { subs = [keyboardSub Keys, tickSub] }
 ----------------------------------------------------------------------------
-tickSub :: Sub Action
-tickSub sink = forever $ threadDelay 50000 >> sink Tick
+tickSub :: Sub Model Action
+tickSub sink _ = forever $ threadDelay 50000 >> sink Tick
 ----------------------------------------------------------------------------
 -- Pure LCG for randomness
 nextRng :: Int -> (Int, Int)
@@ -1503,8 +1503,8 @@ spawnNext m =
        else m { mCur = Just newPiece, mNext = next', mRng = rng' }
 ----------------------------------------------------------------------------
 -- View
-viewModel :: context -> props -> Model -> View context Model Action
-viewModel _ _ m =
+viewModel :: Model -> View context props Model Action
+viewModel m =
   H.div_
     [ CSS.style_
         [ CSS.display "flex"
@@ -1559,7 +1559,7 @@ viewModel _ _ m =
         [ text "\\8592\\8594 move  \\8593 rotate  \\8595 soft drop  SPC hard drop  P pause  R restart" ]
     ]
 ----------------------------------------------------------------------------
-viewBoard :: Model -> View context Model Action
+viewBoard :: Model -> View context props Model Action
 viewBoard m =
   let w     = boardW * cellSz
       h     = boardH * cellSz
@@ -1583,7 +1583,7 @@ viewBoard m =
       ++ overlayViews m
        )
 ----------------------------------------------------------------------------
-bgCells :: [View context Model Action]
+bgCells :: [View context props Model Action]
 bgCells =
   [ SV.rect_
       [ SP.x_ (ms (c * cellSz))
@@ -1597,7 +1597,7 @@ bgCells =
   | r <- [0..boardH-1], c <- [0..boardW-1]
   ]
 ----------------------------------------------------------------------------
-boardCells :: Board -> [View context Model Action]
+boardCells :: Board -> [View context props Model Action]
 boardCells board =
   [ SV.rect_
       [ SP.x_ (ms (c * cellSz + 1))
@@ -1613,7 +1613,7 @@ boardCells board =
   , (c, Just col) <- zip [0..] row
   ]
 ----------------------------------------------------------------------------
-ghostCells :: Piece -> [View context Model Action]
+ghostCells :: Piece -> [View context props Model Action]
 ghostCells p =
   [ SV.rect_
       [ SP.x_ (ms (c * cellSz + 3))
@@ -1629,7 +1629,7 @@ ghostCells p =
   | (r, c) <- pieceCells p, r >= 0
   ]
 ----------------------------------------------------------------------------
-activeCells :: Piece -> [View context Model Action]
+activeCells :: Piece -> [View context props Model Action]
 activeCells p =
   [ SV.rect_
       [ SP.x_ (ms (c * cellSz + 1))
@@ -1644,7 +1644,7 @@ activeCells p =
   | (r, c) <- pieceCells p, r >= 0
   ]
 ----------------------------------------------------------------------------
-overlayViews :: Model -> [View context Model Action]
+overlayViews :: Model -> [View context props Model Action]
 overlayViews m =
   let w = boardW * cellSz
       h = boardH * cellSz
@@ -1668,7 +1668,7 @@ overlayViews m =
          ]
        Playing -> []
 ----------------------------------------------------------------------------
-svgLabel :: MisoString -> MisoString -> MisoString -> MisoString -> MisoString -> View context Model Action
+svgLabel :: MisoString -> MisoString -> MisoString -> MisoString -> MisoString -> View context props Model Action
 svgLabel x y sz col txt =
   SV.text_
     [ SP.x_ x, SP.y_ y
@@ -1680,7 +1680,7 @@ svgLabel x y sz col txt =
     ]
     [ text txt ]
 ----------------------------------------------------------------------------
-viewPanel :: Model -> View context Model Action
+viewPanel :: Model -> View context props Model Action
 viewPanel m =
   H.div_
     [ CSS.style_
@@ -1697,7 +1697,7 @@ viewPanel m =
     , restartBtn
     ]
 ----------------------------------------------------------------------------
-infoCard :: MisoString -> View context Model Action -> View context Model Action
+infoCard :: MisoString -> View context props Model Action -> View context props Model Action
 infoCard label inner =
   H.div_
     [ CSS.style_
@@ -1720,7 +1720,7 @@ infoCard label inner =
     , inner
     ]
 ----------------------------------------------------------------------------
-statLabel :: MisoString -> View context Model Action
+statLabel :: MisoString -> View context props Model Action
 statLabel val =
   H.p_
     [ CSS.style_
@@ -1733,7 +1733,7 @@ statLabel val =
     ]
     [ text val ]
 ----------------------------------------------------------------------------
-nextPieceView :: PType -> View context Model Action
+nextPieceView :: PType -> View context props Model Action
 nextPieceView pt =
   let preview   = Piece { pType = pt, pX = 0, pY = 0, pRot = 0 }
       cells     = pieceCells preview
@@ -1759,7 +1759,7 @@ nextPieceView pt =
        | (r, c) <- cells
        ]
 ----------------------------------------------------------------------------
-restartBtn :: View context Model Action
+restartBtn :: View context props Model Action
 restartBtn =
   H.button_
     [ SV.onClick Restart
